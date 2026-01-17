@@ -153,6 +153,9 @@ describe('ImageProcessorService', () => {
     });
 
     expect(result).toBeDefined();
+
+    const outputMetadata = await sharp(result.buffer).metadata();
+    expect(outputMetadata.exif).toBeUndefined();
   });
 
   it('should throw error for unsupported format', async () => {

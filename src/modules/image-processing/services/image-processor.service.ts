@@ -178,7 +178,7 @@ export class ImageProcessorService {
     const quality = output?.quality ?? this.defaults.quality;
     const stripMetadata = output?.stripMetadata ?? this.defaults.stripMetadata;
 
-    if (stripMetadata) {
+    if (!stripMetadata) {
       pipeline = pipeline.withMetadata({ orientation: undefined });
     }
 
