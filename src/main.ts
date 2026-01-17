@@ -14,11 +14,25 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = join(__filename, '..');
 
 async function bootstrap() {
+  // Create temporary app to get config (using minimal Fastify adapter)
+  const tempApp = await NestFactory.create(
+    AppModule,
+    new FastifyAdapter({ logger: false }),
+    { logger: false },
+  );
+  const configService = tempApp.get(ConfigService);
+  const imageConfig = configService.get<{ maxBytes: number }>('image')!;
+  
+  // Calculate body limit: maxBytes * 1.5 (to account for Base64 encoding overhead)
+  const bodyLimitBytes = Math.floor(imageConfig.maxBytes * 1.5);
+  await tempApp.close();
+
   // Create app with bufferLogs enabled to capture early logs
   const app = await NestFactory.create<NestFastifyApplication>(
     AppModule,
     new FastifyAdapter({
       logger: false, // We'll use Pino logger instead
+      bodyLimit: bodyLimitBytes,
     }),
     {
       bufferLogs: true,
@@ -28,9 +42,7 @@ async function bootstrap() {
   // Use Pino logger for the entire application
   app.useLogger(app.get(Logger));
 
-  const configService = app.get(ConfigService);
   const logger = app.get(Logger);
-
   const appConfig = configService.get<AppConfig>('app')!;
 
   app.useGlobalPipes(
@@ -63,6 +75,7 @@ async function bootstrap() {
   logger.log(`🖼️  UI available at: http://${appConfig.host}:${appConfig.port}/`, 'Bootstrap');
   logger.log(`📊 Environment: ${appConfig.nodeEnv}`, 'Bootstrap');
   logger.log(`📝 Log level: ${appConfig.logLevel}`, 'Bootstrap');
+  logger.log(`📦 Body limit: ${Math.round(bodyLimitBytes / 1024 / 1024)}MB`, 'Bootstrap');
 
   // Rely on enableShutdownHooks for graceful shutdown
 }
