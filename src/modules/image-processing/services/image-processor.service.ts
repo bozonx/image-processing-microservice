@@ -134,6 +134,12 @@ export class ImageProcessorService {
         case 'png':
           pipeline = pipeline.png({
             compressionLevel: dto.output?.compressionLevel ?? this.configService.get('image.png.compressionLevel', 6),
+            palette: dto.output?.palette ?? (dto.output?.quality !== undefined),
+            quality: dto.output?.quality,
+            effort: dto.output?.effort ?? this.defaults.effort,
+            colors: dto.output?.colors,
+            dither: dto.output?.dither,
+            adaptiveFiltering: dto.output?.adaptiveFiltering,
           });
           break;
         case 'gif':

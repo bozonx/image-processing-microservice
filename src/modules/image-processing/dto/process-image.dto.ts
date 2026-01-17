@@ -132,6 +132,26 @@ export class OutputDto {
   @IsOptional()
   @IsString()
   chromaSubsampling?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  palette?: boolean;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(2)
+  @Max(256)
+  colors?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(1)
+  dither?: number;
+
+  @IsOptional()
+  @IsBoolean()
+  adaptiveFiltering?: boolean;
 }
 
 export class ProcessImageDto {

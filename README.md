@@ -120,6 +120,10 @@ docker compose -f docker/docker-compose.yml up -d --build
 | `mozjpeg` | `boolean` | Использовать библиотеку mozjpeg для лучшего сжатия (для JPEG). |
 | `compressionLevel` | `number` | Уровень сжатия (0-9) для PNG. Чем выше, тем медленнее, но файл меньше. |
 | `chromaSubsampling` | `string` | Цветовая субдискретизация для AVIF и JPEG (например, `4:2:0`, `4:4:4`). |
+| `palette` | `boolean` | Использовать квантование палитры (аналог pngquant) для PNG. Включается автоматически, если задан `quality`. |
+| `colors` | `number` | Максимальное количество цветов в палитре (2-256) для PNG. |
+| `dither` | `number` | Уровень диффузии ошибок Floyd-Steinberg (0.0 - 1.0) для PNG. |
+| `adaptiveFiltering` | `boolean` | Использовать адаптивную фильтрацию строк для PNG. |
 
 **Пример запроса:**
 ```json
