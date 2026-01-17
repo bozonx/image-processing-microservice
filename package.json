@@ -1,7 +1,7 @@
 {
   "name": "image-processing-microservice",
   "version": "0.1.0",
-  "description": "Микросервис для обработки изображений",
+  "description": "Image processing microservice",
   "type": "module",
   "main": "dist/src/main.js",
   "scripts": {
