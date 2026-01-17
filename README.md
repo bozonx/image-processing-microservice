@@ -219,7 +219,7 @@ docker compose -f docker/docker-compose.yml up -d --build
 
 ### Основные Параметры
 
-- `LISTEN_PORT` - Порт сервиса (default: 3000)
+- `LISTEN_PORT` - Порт сервиса (default: 8080)
 - `LOG_LEVEL` - Уровень логирования (default: info)
 - `FILE_MAX_BYTES_MB` - Максимальный размер входного файла в MB (default: 25)
 - `HEAVY_TASKS_MAX_CONCURRENCY` - Количество параллельных задач (default: 4)
