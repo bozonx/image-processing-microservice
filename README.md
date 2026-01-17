@@ -86,8 +86,19 @@ docker compose -f docker/docker-compose.yml up -d --build
   "priority": 1,
   "transform": {
     "resize": {
-      "maxDimension": 1920
-    }
+      "width": 1000,
+      "height": 1000,
+      "fit": "cover"
+    },
+    "crop": {
+      "left": 100,
+      "top": 100,
+      "width": 500,
+      "height": 500
+    },
+    "rotate": 90,
+    "flip": true,
+    "autoRotate": true
   },
   "output": {
     "format": "webp",
@@ -302,10 +313,10 @@ const processedImage = Buffer.from(result.buffer, 'base64');
 
 ## Roadmap
 
-### v1.1 (Фаза 2)
+### v1.1 (Фаза 2) - В процессе
 - [ ] Поддержка всех форматов (BMP, JPEG XL)
-- [ ] Продвинутые трансформации (crop, rotate, flip)
-- [ ] Умная обрезка
+- [x] Продвинутые трансформации (crop, rotate, flip)
+- [ ] Умная обрезка (Smart Crop)
 - [ ] Водяные знаки
 
 ### v1.2 (Фаза 3)

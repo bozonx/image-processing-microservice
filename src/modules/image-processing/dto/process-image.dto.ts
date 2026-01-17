@@ -42,6 +42,24 @@ export class ResizeDto {
   position?: string;
 }
 
+export class ExtractDto {
+  @IsNumber()
+  @Min(0)
+  left!: number;
+
+  @IsNumber()
+  @Min(0)
+  top!: number;
+
+  @IsNumber()
+  @Min(1)
+  width!: number;
+
+  @IsNumber()
+  @Min(1)
+  height!: number;
+}
+
 export class TransformDto {
   @IsOptional()
   @ValidateNested()
@@ -49,8 +67,34 @@ export class TransformDto {
   resize?: ResizeDto;
 
   @IsOptional()
+  @ValidateNested()
+  @Type(() => ExtractDto)
+  crop?: ExtractDto;
+
+  @IsOptional()
+  @IsBoolean()
+  autoRotate?: boolean;
+
+  /**
+   * @deprecated Use autoRotate instead
+   */
+  @IsOptional()
   @IsBoolean()
   autoOrient?: boolean;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(-360)
+  @Max(360)
+  rotate?: number;
+
+  @IsOptional()
+  @IsBoolean()
+  flip?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  flop?: boolean;
 }
 
 export class OutputDto {

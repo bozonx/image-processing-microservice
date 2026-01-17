@@ -42,10 +42,16 @@ export class ImageProcessorService {
     try {
       let pipeline = sharp(inputBuffer);
 
-      // Auto-orient
-      const autoOrient = dto.transform?.autoOrient ?? this.defaults.autoOrient;
-      if (autoOrient) {
+      // Auto-orient (EXIF)
+      // autoRotate is the new name, autoOrient is for backward compatibility
+      const autoRotate = dto.transform?.autoRotate ?? dto.transform?.autoOrient ?? this.defaults.autoRotate ?? this.defaults.autoOrient;
+      if (autoRotate) {
         pipeline = pipeline.rotate();
+      }
+
+      // Crop
+      if (dto.transform?.crop) {
+        pipeline = pipeline.extract(dto.transform.crop);
       }
 
       // Resize
@@ -62,7 +68,7 @@ export class ImageProcessorService {
         if (resize.maxDimension) {
           // Proportional resize
           pipeline = pipeline.resize(resize.maxDimension, resize.maxDimension, {
-            fit: 'inside',
+            fit: resize.fit || 'inside',
             withoutEnlargement: resize.withoutEnlargement ?? true,
           });
         } else if (resize.width || resize.height) {
@@ -73,6 +79,19 @@ export class ImageProcessorService {
             position: resize.position as any,
           });
         }
+      }
+
+      // Flip/Flop
+      if (dto.transform?.flip) {
+        pipeline = pipeline.flip();
+      }
+      if (dto.transform?.flop) {
+        pipeline = pipeline.flop();
+      }
+
+      // Custom Rotate
+      if (dto.transform?.rotate !== undefined) {
+        pipeline = pipeline.rotate(dto.transform.rotate);
       }
 
       // Output format

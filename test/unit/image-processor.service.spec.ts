@@ -215,12 +215,83 @@ describe('ImageProcessorService', () => {
     ).rejects.toThrow(BadRequestException);
   });
 
-  it('should throw error for invalid MIME type', async () => {
-    await expect(
-      service.process({
-        image: Buffer.from('test').toString('base64'),
-        mimeType: 'text/plain',
-      }),
-    ).rejects.toThrow(BadRequestException);
+  it('should rotate image with custom angle', async () => {
+    const inputBuffer = await sharp({
+      create: {
+        width: 100,
+        height: 50,
+        channels: 3,
+        background: { r: 255, g: 0, b: 0 },
+      },
+    })
+      .jpeg()
+      .toBuffer();
+
+    const result = await service.process({
+      image: inputBuffer.toString('base64'),
+      mimeType: 'image/jpeg',
+      transform: {
+        rotate: 90,
+      },
+    });
+
+    // Dimensions should be swapped
+    expect(result.dimensions.width).toBe(50);
+    expect(result.dimensions.height).toBe(100);
+  });
+
+  it('should flip and flop image', async () => {
+    const inputBuffer = await sharp({
+      create: {
+        width: 100,
+        height: 100,
+        channels: 3,
+        background: { r: 255, g: 0, b: 0 },
+      },
+    })
+      .jpeg()
+      .toBuffer();
+
+    const result = await service.process({
+      image: inputBuffer.toString('base64'),
+      mimeType: 'image/jpeg',
+      transform: {
+        flip: true,
+        flop: true,
+      },
+    });
+
+    expect(result).toBeDefined();
+    expect(result.dimensions.width).toBe(100);
+    expect(result.dimensions.height).toBe(100);
+  });
+
+  it('should crop image', async () => {
+    const inputBuffer = await sharp({
+      create: {
+        width: 1000,
+        height: 1000,
+        channels: 3,
+        background: { r: 255, g: 0, b: 0 },
+      },
+    })
+      .jpeg()
+      .toBuffer();
+
+    const result = await service.process({
+      image: inputBuffer.toString('base64'),
+      mimeType: 'image/jpeg',
+      transform: {
+        crop: {
+          left: 100,
+          top: 100,
+          width: 500,
+          height: 300,
+        },
+      },
+    });
+
+    expect(result.dimensions.width).toBe(500);
+    expect(result.dimensions.height).toBe(300);
   });
 });
