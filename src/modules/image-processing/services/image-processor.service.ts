@@ -40,10 +40,14 @@ export class ImageProcessorService {
     const beforeBytes = inputBuffer.length;
 
     try {
-      let pipeline = sharp(inputBuffer);
+      const options: sharp.SharpOptions = {};
+      if (dto.mimeType === 'image/gif') {
+        options.animated = true;
+      }
+      let pipeline = sharp(inputBuffer, options);
 
       // Auto-orient (EXIF)
-      const autoOrient = dto.transform?.autoOrient ?? dto.transform?.autoRotate ?? this.defaults.autoOrient;
+      const autoOrient = dto.transform?.autoOrient ?? this.defaults.autoOrient;
       if (autoOrient) {
         pipeline = pipeline.rotate();
       }

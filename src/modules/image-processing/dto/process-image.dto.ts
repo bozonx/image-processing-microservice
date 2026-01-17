@@ -75,13 +75,6 @@ export class TransformDto {
   @IsBoolean()
   autoOrient?: boolean;
 
-  /**
-   * @deprecated Use autoOrient instead
-   */
-  @IsOptional()
-  @IsBoolean()
-  autoRotate?: boolean;
-
   @IsOptional()
   @IsNumber()
   @Min(-360)
