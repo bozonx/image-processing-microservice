@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Image Processing Microservice - Test UI</title>
+    <meta name="description" content="Test interface for image processing microservice with support for resize, crop, rotate, and format conversion">
+    <link rel="stylesheet" href="/styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <div class="header-content">
+                <h1 class="title">
+                    <span class="icon">🖼️</span>
+                    Image Processing Microservice
+                </h1>
+                <p class="subtitle">Test all image processing capabilities</p>
+            </div>
+            <div class="health-status" id="healthStatus">
+                <span class="status-indicator"></span>
+                <span class="status-text">Checking...</span>
+            </div>
+        </header>
+
+        <div class="tabs">
+            <button class="tab-button active" data-tab="process">
+                <span class="tab-icon">⚙️</span>
+                Process Image
+            </button>
+            <button class="tab-button" data-tab="exif">
+                <span class="tab-icon">📊</span>
+                Extract EXIF
+            </button>
+        </div>
+
+        <div class="tab-content active" id="processTab">
+            <div class="upload-section">
+                <div class="upload-area" id="uploadArea">
+                    <input type="file" id="fileInput" accept="image/*" hidden>
+                    <div class="upload-content">
+                        <div class="upload-icon">📁</div>
+                        <p class="upload-text">Click to upload or drag and drop</p>
+                        <p class="upload-hint">Supported: WebP, AVIF, JPEG, PNG, GIF, TIFF, BMP</p>
+                    </div>
+                </div>
+                
+                <div class="preview-container" id="previewContainer" style="display: none;">
+                    <div class="preview-header">
+                        <h3>Original Image</h3>
+                        <button class="btn-secondary" id="clearBtn">Clear</button>
+                    </div>
+                    <img id="previewImage" alt="Preview">
+                    <div class="image-info" id="imageInfo"></div>
+                </div>
+            </div>
+
+            <div class="controls-section" id="controlsSection" style="display: none;">
+                <div class="control-group">
+                    <h3 class="control-title">Priority</h3>
+                    <div class="radio-group">
+                        <label class="radio-label">
+                            <input type="radio" name="priority" value="0">
+                            <span>High (0)</span>
+                        </label>
+                        <label class="radio-label">
+                            <input type="radio" name="priority" value="1">
+                            <span>Medium (1)</span>
+                        </label>
+                        <label class="radio-label">
+                            <input type="radio" name="priority" value="2" checked>
+                            <span>Low (2)</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="control-group">
+                    <h3 class="control-title">Transformations</h3>
+                    
+                    <div class="checkbox-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="autoOrient" checked>
+                            <span>Auto Orient (EXIF-based rotation/flip)</span>
+                        </label>
+                    </div>
+
+                    <div class="accordion">
+                        <button class="accordion-header" type="button">
+                            <span>Resize</span>
+                            <span class="accordion-icon">▼</span>
+                        </button>
+                        <div class="accordion-content">
+                            <div class="form-row">
+                                <div class="form-field">
+                                    <label>Width (px)</label>
+                                    <input type="number" id="resizeWidth" placeholder="Auto">
+                                </div>
+                                <div class="form-field">
+                                    <label>Height (px)</label>
+                                    <input type="number" id="resizeHeight" placeholder="Auto">
+                                </div>
+                            </div>
+                            <div class="form-field">
+                                <label>Max Dimension (px)</label>
+                                <input type="number" id="maxDimension" placeholder="Limit largest side">
+                            </div>
+                            <div class="form-field">
+                                <label>Fit Mode</label>
+                                <select id="fitMode">
+                                    <option value="inside">Inside (default)</option>
+                                    <option value="cover">Cover</option>
+                                    <option value="contain">Contain</option>
+                                    <option value="fill">Fill</option>
+                                    <option value="outside">Outside</option>
+                                </select>
+                            </div>
+                            <div class="form-field">
+                                <label>Position</label>
+                                <select id="position">
+                                    <option value="center">Center</option>
+                                    <option value="top">Top</option>
+                                    <option value="right">Right</option>
+                                    <option value="bottom">Bottom</option>
+                                    <option value="left">Left</option>
+                                    <option value="right top">Right Top</option>
+                                    <option value="right bottom">Right Bottom</option>
+                                    <option value="left bottom">Left Bottom</option>
+                                    <option value="left top">Left Top</option>
+                                    <option value="entropy">Entropy</option>
+                                    <option value="attention">Attention</option>
+                                </select>
+                            </div>
+                            <div class="checkbox-group">
+                                <label class="checkbox-label">
+                                    <input type="checkbox" id="withoutEnlargement" checked>
+                                    <span>Without Enlargement</span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="accordion">
+                        <button class="accordion-header" type="button">
+                            <span>Crop</span>
+                            <span class="accordion-icon">▼</span>
+                        </button>
+                        <div class="accordion-content">
+                            <div class="form-row">
+                                <div class="form-field">
+                                    <label>Left (px)</label>
+                                    <input type="number" id="cropLeft" placeholder="0">
+                                </div>
+                                <div class="form-field">
+                                    <label>Top (px)</label>
+                                    <input type="number" id="cropTop" placeholder="0">
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-field">
+                                    <label>Width (px)</label>
+                                    <input type="number" id="cropWidth" placeholder="Required">
+                                </div>
+                                <div class="form-field">
+                                    <label>Height (px)</label>
+                                    <input type="number" id="cropHeight" placeholder="Required">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="accordion">
+                        <button class="accordion-header" type="button">
+                            <span>Rotate & Flip</span>
+                            <span class="accordion-icon">▼</span>
+                        </button>
+                        <div class="accordion-content">
+                            <div class="form-field">
+                                <label>Rotate (degrees)</label>
+                                <input type="number" id="rotate" placeholder="-360 to 360" min="-360" max="360">
+                            </div>
+                            <div class="checkbox-group">
+                                <label class="checkbox-label">
+                                    <input type="checkbox" id="flip">
+                                    <span>Flip Vertically</span>
+                                </label>
+                                <label class="checkbox-label">
+                                    <input type="checkbox" id="flop">
+                                    <span>Flop Horizontally</span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="accordion">
+                        <button class="accordion-header" type="button">
+                            <span>Background Color</span>
+                            <span class="accordion-icon">▼</span>
+                        </button>
+                        <div class="accordion-content">
+                            <div class="form-field">
+                                <label>Color (hex or name)</label>
+                                <input type="text" id="backgroundColor" placeholder="#ffffff or white">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="control-group">
+                    <h3 class="control-title">Output Format</h3>
+                    
+                    <div class="form-field">
+                        <label>Format</label>
+                        <select id="outputFormat">
+                            <option value="">Same as input</option>
+                            <option value="webp">WebP</option>
+                            <option value="avif">AVIF</option>
+                            <option value="jpeg">JPEG</option>
+                            <option value="png">PNG</option>
+                            <option value="gif">GIF</option>
+                            <option value="tiff">TIFF</option>
+                        </select>
+                    </div>
+
+                    <div class="form-field">
+                        <label>Quality (1-100)</label>
+                        <input type="number" id="quality" min="1" max="100" placeholder="Default">
+                    </div>
+
+                    <div class="checkbox-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="lossless">
+                            <span>Lossless (WebP/AVIF)</span>
+                        </label>
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="stripMetadata">
+                            <span>Strip Metadata</span>
+                        </label>
+                    </div>
+
+                    <div class="accordion">
+                        <button class="accordion-header" type="button">
+                            <span>Advanced Options</span>
+                            <span class="accordion-icon">▼</span>
+                        </button>
+                        <div class="accordion-content">
+                            <div class="form-field">
+                                <label>Effort (0-9)</label>
+                                <input type="number" id="effort" min="0" max="9" placeholder="Default">
+                            </div>
+                            <div class="form-field">
+                                <label>Compression Level (0-9, PNG)</label>
+                                <input type="number" id="compressionLevel" min="0" max="9" placeholder="Default">
+                            </div>
+                            <div class="form-field">
+                                <label>Chroma Subsampling</label>
+                                <select id="chromaSubsampling">
+                                    <option value="">Default</option>
+                                    <option value="4:2:0">4:2:0</option>
+                                    <option value="4:4:4">4:4:4</option>
+                                </select>
+                            </div>
+                            <div class="checkbox-group">
+                                <label class="checkbox-label">
+                                    <input type="checkbox" id="progressive">
+                                    <span>Progressive (JPEG)</span>
+                                </label>
+                                <label class="checkbox-label">
+                                    <input type="checkbox" id="mozjpeg">
+                                    <span>MozJPEG (JPEG)</span>
+                                </label>
+                                <label class="checkbox-label">
+                                    <input type="checkbox" id="palette">
+                                    <span>Palette (PNG)</span>
+                                </label>
+                                <label class="checkbox-label">
+                                    <input type="checkbox" id="adaptiveFiltering">
+                                    <span>Adaptive Filtering (PNG)</span>
+                                </label>
+                            </div>
+                            <div class="form-field">
+                                <label>Colors (2-256, PNG)</label>
+                                <input type="number" id="colors" min="2" max="256" placeholder="Default">
+                            </div>
+                            <div class="form-field">
+                                <label>Dither (0.0-1.0, PNG)</label>
+                                <input type="number" id="dither" min="0" max="1" step="0.1" placeholder="Default">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <button class="btn-primary" id="processBtn">
+                    <span class="btn-icon">⚡</span>
+                    Process Image
+                </button>
+            </div>
+
+            <div class="results-section" id="resultsSection" style="display: none;">
+                <div class="results-header">
+                    <h3>Processed Image</h3>
+                    <div class="results-actions">
+                        <button class="btn-secondary" id="downloadBtn">Download</button>
+                        <button class="btn-secondary" id="newProcessBtn">Process Another</button>
+                    </div>
+                </div>
+                <div class="results-content">
+                    <img id="resultImage" alt="Processed result">
+                    <div class="stats-grid" id="statsGrid"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="tab-content" id="exifTab">
+            <div class="upload-section">
+                <div class="upload-area" id="exifUploadArea">
+                    <input type="file" id="exifFileInput" accept="image/*" hidden>
+                    <div class="upload-content">
+                        <div class="upload-icon">📁</div>
+                        <p class="upload-text">Click to upload or drag and drop</p>
+                        <p class="upload-hint">Upload image to extract EXIF metadata</p>
+                    </div>
+                </div>
+                
+                <div class="preview-container" id="exifPreviewContainer" style="display: none;">
+                    <div class="preview-header">
+                        <h3>Image</h3>
+                        <button class="btn-secondary" id="exifClearBtn">Clear</button>
+                    </div>
+                    <img id="exifPreviewImage" alt="Preview">
+                </div>
+            </div>
+
+            <div class="controls-section" id="exifControlsSection" style="display: none;">
+                <div class="control-group">
+                    <h3 class="control-title">Priority</h3>
+                    <div class="radio-group">
+                        <label class="radio-label">
+                            <input type="radio" name="exifPriority" value="0">
+                            <span>High (0)</span>
+                        </label>
+                        <label class="radio-label">
+                            <input type="radio" name="exifPriority" value="1">
+                            <span>Medium (1)</span>
+                        </label>
+                        <label class="radio-label">
+                            <input type="radio" name="exifPriority" value="2" checked>
+                            <span>Low (2)</span>
+                        </label>
+                    </div>
+                </div>
+
+                <button class="btn-primary" id="extractExifBtn">
+                    <span class="btn-icon">📊</span>
+                    Extract EXIF Data
+                </button>
+            </div>
+
+            <div class="results-section" id="exifResultsSection" style="display: none;">
+                <div class="results-header">
+                    <h3>EXIF Metadata</h3>
+                    <button class="btn-secondary" id="exifNewBtn">Extract Another</button>
+                </div>
+                <div class="exif-data" id="exifData"></div>
+            </div>
+        </div>
+
+        <div class="loading-overlay" id="loadingOverlay" style="display: none;">
+            <div class="loading-spinner"></div>
+            <p class="loading-text">Processing...</p>
+        </div>
+
+        <div class="toast" id="toast"></div>
+    </div>
+
+    <script src="/app.js"></script>
+</body>
+</html>

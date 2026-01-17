@@ -4,8 +4,14 @@ import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fa
 import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Logger } from 'nestjs-pino';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import fastifyStatic from '@fastify/static';
 import { AppModule } from './app.module.js';
 import type { AppConfig } from './config/app.config.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = join(__filename, '..');
 
 async function bootstrap() {
   // Create app with bufferLogs enabled to capture early logs
@@ -35,6 +41,16 @@ async function bootstrap() {
   const globalPrefix = appConfig.basePath ? `${appConfig.basePath}/api/v1` : 'api/v1';
   app.setGlobalPrefix(globalPrefix);
 
+  // Register static files serving for UI
+  const publicPath = join(__dirname, '..', '..', 'public');
+  await app.register(fastifyStatic, {
+    root: publicPath,
+    prefix: '/',
+    constraints: {},
+  });
+
+  logger.log(`📁 Serving static files from: ${publicPath}`, 'Bootstrap');
+
   // Enable graceful shutdown
   app.enableShutdownHooks();
 
@@ -44,6 +60,7 @@ async function bootstrap() {
     `🚀 NestJS service is running on: http://${appConfig.host}:${appConfig.port}/${globalPrefix}`,
     'Bootstrap',
   );
+  logger.log(`🖼️  UI available at: http://${appConfig.host}:${appConfig.port}/`, 'Bootstrap');
   logger.log(`📊 Environment: ${appConfig.nodeEnv}`, 'Bootstrap');
   logger.log(`📝 Log level: ${appConfig.logLevel}`, 'Bootstrap');
 

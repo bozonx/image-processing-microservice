@@ -1,0 +1,572 @@
+// API Configuration
+const API_BASE = '/api/v1';
+
+
+// State
+let currentFile = null;
+let currentMimeType = null;
+let currentBase64 = null;
+let exifFile = null;
+let exifMimeType = null;
+let exifBase64 = null;
+
+// Initialize
+document.addEventListener('DOMContentLoaded', () => {
+  initializeTabs();
+  initializeProcessTab();
+  initializeExifTab();
+  initializeAccordions();
+  checkHealth();
+
+  // Check health every 30 seconds
+  setInterval(checkHealth, 30000);
+});
+
+// Health Check
+async function checkHealth() {
+  const statusIndicator = document.querySelector('.status-indicator');
+  const statusText = document.querySelector('.status-text');
+
+  try {
+    const response = await fetch(`${API_BASE}/health`);
+    const data = await response.json();
+
+    if (data.status === 'ok') {
+      statusIndicator.classList.add('online');
+      statusIndicator.classList.remove('offline');
+      statusText.textContent = `Online • Queue: ${data.queue.size} (${data.queue.pending} pending)`;
+    } else {
+      throw new Error('Service not healthy');
+    }
+  } catch (error) {
+    statusIndicator.classList.add('offline');
+    statusIndicator.classList.remove('online');
+    statusText.textContent = 'Offline';
+  }
+}
+
+// Tabs
+function initializeTabs() {
+  const tabButtons = document.querySelectorAll('.tab-button');
+  const tabContents = document.querySelectorAll('.tab-content');
+
+  tabButtons.forEach(button => {
+    button.addEventListener('click', () => {
+      const tabName = button.dataset.tab;
+
+      tabButtons.forEach(btn => btn.classList.remove('active'));
+      tabContents.forEach(content => content.classList.remove('active'));
+
+      button.classList.add('active');
+      document.getElementById(`${tabName}Tab`).classList.add('active');
+    });
+  });
+}
+
+// Accordions
+function initializeAccordions() {
+  const accordionHeaders = document.querySelectorAll('.accordion-header');
+
+  accordionHeaders.forEach(header => {
+    header.addEventListener('click', () => {
+      const content = header.nextElementSibling;
+      const isActive = header.classList.contains('active');
+
+      header.classList.toggle('active');
+      content.classList.toggle('active');
+    });
+  });
+}
+
+// Process Tab
+function initializeProcessTab() {
+  const uploadArea = document.getElementById('uploadArea');
+  const fileInput = document.getElementById('fileInput');
+  const clearBtn = document.getElementById('clearBtn');
+  const processBtn = document.getElementById('processBtn');
+  const downloadBtn = document.getElementById('downloadBtn');
+  const newProcessBtn = document.getElementById('newProcessBtn');
+
+  // Upload area click
+  uploadArea.addEventListener('click', () => fileInput.click());
+
+  // File input change
+  fileInput.addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (file) handleFileUpload(file);
+  });
+
+  // Drag and drop
+  uploadArea.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    uploadArea.classList.add('drag-over');
+  });
+
+  uploadArea.addEventListener('dragleave', () => {
+    uploadArea.classList.remove('drag-over');
+  });
+
+  uploadArea.addEventListener('drop', (e) => {
+    e.preventDefault();
+    uploadArea.classList.remove('drag-over');
+    const file = e.dataTransfer.files[0];
+    if (file && file.type.startsWith('image/')) {
+      handleFileUpload(file);
+    }
+  });
+
+  // Clear button
+  clearBtn.addEventListener('click', clearProcessForm);
+
+  // Process button
+  processBtn.addEventListener('click', processImage);
+
+  // Download button
+  downloadBtn.addEventListener('click', downloadResult);
+
+  // New process button
+  newProcessBtn.addEventListener('click', clearProcessForm);
+}
+
+async function handleFileUpload(file) {
+  currentFile = file;
+  currentMimeType = file.type;
+
+  try {
+    currentBase64 = await fileToBase64(file);
+
+    // Show preview
+    const previewContainer = document.getElementById('previewContainer');
+    const previewImage = document.getElementById('previewImage');
+    const imageInfo = document.getElementById('imageInfo');
+    const uploadArea = document.getElementById('uploadArea');
+    const controlsSection = document.getElementById('controlsSection');
+
+    previewImage.src = `data:${currentMimeType};base64,${currentBase64}`;
+
+    // Get image dimensions
+    const img = new Image();
+    img.onload = () => {
+      imageInfo.innerHTML = `
+                <strong>File:</strong> ${file.name}<br>
+                <strong>Type:</strong> ${currentMimeType}<br>
+                <strong>Size:</strong> ${formatBytes(file.size)}<br>
+                <strong>Dimensions:</strong> ${img.width} × ${img.height}px
+            `;
+    };
+    img.src = previewImage.src;
+
+    uploadArea.style.display = 'none';
+    previewContainer.style.display = 'block';
+    controlsSection.style.display = 'block';
+  } catch (error) {
+    showToast('Failed to load image', 'error');
+  }
+}
+
+function clearProcessForm() {
+  currentFile = null;
+  currentMimeType = null;
+  currentBase64 = null;
+
+  document.getElementById('uploadArea').style.display = 'block';
+  document.getElementById('previewContainer').style.display = 'none';
+  document.getElementById('controlsSection').style.display = 'none';
+  document.getElementById('resultsSection').style.display = 'none';
+  document.getElementById('fileInput').value = '';
+}
+
+async function processImage() {
+  if (!currentBase64 || !currentMimeType) {
+    showToast('Please upload an image first', 'error');
+    return;
+  }
+
+  const priority = parseInt(document.querySelector('input[name="priority"]:checked').value);
+  const requestBody = {
+    image: currentBase64,
+    mimeType: currentMimeType,
+    priority,
+    transform: buildTransformObject(),
+    output: buildOutputObject()
+  };
+
+  showLoading(true);
+
+  try {
+    const response = await fetch(`${API_BASE}/process`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(requestBody)
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || 'Processing failed');
+    }
+
+    const result = await response.json();
+    displayProcessResult(result);
+    showToast('Image processed successfully!', 'success');
+  } catch (error) {
+    showToast(error.message || 'Failed to process image', 'error');
+  } finally {
+    showLoading(false);
+  }
+}
+
+function buildTransformObject() {
+  const transform = {};
+
+  // Auto orient
+  const autoOrient = document.getElementById('autoOrient').checked;
+  if (autoOrient !== undefined) {
+    transform.autoOrient = autoOrient;
+  }
+
+  // Resize
+  const width = parseInt(document.getElementById('resizeWidth').value);
+  const height = parseInt(document.getElementById('resizeHeight').value);
+  const maxDimension = parseInt(document.getElementById('maxDimension').value);
+  const fit = document.getElementById('fitMode').value;
+  const position = document.getElementById('position').value;
+  const withoutEnlargement = document.getElementById('withoutEnlargement').checked;
+
+  if (width || height || maxDimension) {
+    transform.resize = {};
+    if (width) transform.resize.width = width;
+    if (height) transform.resize.height = height;
+    if (maxDimension) transform.resize.maxDimension = maxDimension;
+    if (fit && fit !== 'inside') transform.resize.fit = fit;
+    if (position && position !== 'center') transform.resize.position = position;
+    if (withoutEnlargement !== undefined) transform.resize.withoutEnlargement = withoutEnlargement;
+  }
+
+  // Crop
+  const cropLeft = parseInt(document.getElementById('cropLeft').value);
+  const cropTop = parseInt(document.getElementById('cropTop').value);
+  const cropWidth = parseInt(document.getElementById('cropWidth').value);
+  const cropHeight = parseInt(document.getElementById('cropHeight').value);
+
+  if (cropWidth && cropHeight) {
+    transform.crop = {
+      width: cropWidth,
+      height: cropHeight
+    };
+    if (cropLeft) transform.crop.left = cropLeft;
+    if (cropTop) transform.crop.top = cropTop;
+  }
+
+  // Rotate
+  const rotate = parseInt(document.getElementById('rotate').value);
+  if (rotate) {
+    transform.rotate = rotate;
+  }
+
+  // Flip & Flop
+  const flip = document.getElementById('flip').checked;
+  const flop = document.getElementById('flop').checked;
+  if (flip) transform.flip = true;
+  if (flop) transform.flop = true;
+
+  // Background color
+  const backgroundColor = document.getElementById('backgroundColor').value.trim();
+  if (backgroundColor) {
+    transform.backgroundColor = backgroundColor;
+  }
+
+  return transform;
+}
+
+function buildOutputObject() {
+  const output = {};
+
+  const format = document.getElementById('outputFormat').value;
+  if (format) output.format = format;
+
+  const quality = parseInt(document.getElementById('quality').value);
+  if (quality) output.quality = quality;
+
+  const lossless = document.getElementById('lossless').checked;
+  if (lossless) output.lossless = true;
+
+  const stripMetadata = document.getElementById('stripMetadata').checked;
+  if (stripMetadata) output.stripMetadata = true;
+
+  const effort = parseInt(document.getElementById('effort').value);
+  if (effort !== undefined && !isNaN(effort)) output.effort = effort;
+
+  const compressionLevel = parseInt(document.getElementById('compressionLevel').value);
+  if (compressionLevel !== undefined && !isNaN(compressionLevel)) output.compressionLevel = compressionLevel;
+
+  const chromaSubsampling = document.getElementById('chromaSubsampling').value;
+  if (chromaSubsampling) output.chromaSubsampling = chromaSubsampling;
+
+  const progressive = document.getElementById('progressive').checked;
+  if (progressive) output.progressive = true;
+
+  const mozjpeg = document.getElementById('mozjpeg').checked;
+  if (mozjpeg) output.mozjpeg = true;
+
+  const palette = document.getElementById('palette').checked;
+  if (palette) output.palette = true;
+
+  const adaptiveFiltering = document.getElementById('adaptiveFiltering').checked;
+  if (adaptiveFiltering) output.adaptiveFiltering = true;
+
+  const colors = parseInt(document.getElementById('colors').value);
+  if (colors) output.colors = colors;
+
+  const dither = parseFloat(document.getElementById('dither').value);
+  if (dither !== undefined && !isNaN(dither)) output.dither = dither;
+
+  return output;
+}
+
+function displayProcessResult(result) {
+  const resultsSection = document.getElementById('resultsSection');
+  const resultImage = document.getElementById('resultImage');
+  const statsGrid = document.getElementById('statsGrid');
+
+  // Display image
+  resultImage.src = `data:${result.mimeType};base64,${result.buffer}`;
+
+  // Display stats
+  const stats = [
+    {
+      label: 'Format',
+      value: result.mimeType.replace('image/', '').toUpperCase()
+    },
+    {
+      label: 'Dimensions',
+      value: `${result.dimensions.width} × ${result.dimensions.height}px`
+    },
+    {
+      label: 'File Size',
+      value: formatBytes(result.size)
+    },
+    {
+      label: 'Original Size',
+      value: formatBytes(result.stats.beforeBytes)
+    },
+    {
+      label: 'Size Reduction',
+      value: `${result.stats.reductionPercent.toFixed(1)}%`,
+      success: result.stats.reductionPercent > 0
+    }
+  ];
+
+  statsGrid.innerHTML = stats.map(stat => `
+        <div class="stat-card">
+            <div class="stat-label">${stat.label}</div>
+            <div class="stat-value ${stat.success ? 'success' : ''}">${stat.value}</div>
+        </div>
+    `).join('');
+
+  // Show results
+  document.getElementById('controlsSection').style.display = 'none';
+  resultsSection.style.display = 'block';
+
+  // Store result for download
+  window.processedResult = result;
+}
+
+function downloadResult() {
+  if (!window.processedResult) return;
+
+  const result = window.processedResult;
+  const extension = result.mimeType.split('/')[1];
+  const filename = `processed-${Date.now()}.${extension}`;
+
+  // Convert base64 to blob
+  const byteCharacters = atob(result.buffer);
+  const byteNumbers = new Array(byteCharacters.length);
+  for (let i = 0; i < byteCharacters.length; i++) {
+    byteNumbers[i] = byteCharacters.charCodeAt(i);
+  }
+  const byteArray = new Uint8Array(byteNumbers);
+  const blob = new Blob([byteArray], { type: result.mimeType });
+
+  // Download
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+
+  showToast('Image downloaded!', 'success');
+}
+
+// EXIF Tab
+function initializeExifTab() {
+  const uploadArea = document.getElementById('exifUploadArea');
+  const fileInput = document.getElementById('exifFileInput');
+  const clearBtn = document.getElementById('exifClearBtn');
+  const extractBtn = document.getElementById('extractExifBtn');
+  const newBtn = document.getElementById('exifNewBtn');
+
+  // Upload area click
+  uploadArea.addEventListener('click', () => fileInput.click());
+
+  // File input change
+  fileInput.addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (file) handleExifFileUpload(file);
+  });
+
+  // Drag and drop
+  uploadArea.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    uploadArea.classList.add('drag-over');
+  });
+
+  uploadArea.addEventListener('dragleave', () => {
+    uploadArea.classList.remove('drag-over');
+  });
+
+  uploadArea.addEventListener('drop', (e) => {
+    e.preventDefault();
+    uploadArea.classList.remove('drag-over');
+    const file = e.dataTransfer.files[0];
+    if (file && file.type.startsWith('image/')) {
+      handleExifFileUpload(file);
+    }
+  });
+
+  // Clear button
+  clearBtn.addEventListener('click', clearExifForm);
+
+  // Extract button
+  extractBtn.addEventListener('click', extractExif);
+
+  // New button
+  newBtn.addEventListener('click', clearExifForm);
+}
+
+async function handleExifFileUpload(file) {
+  exifFile = file;
+  exifMimeType = file.type;
+
+  try {
+    exifBase64 = await fileToBase64(file);
+
+    // Show preview
+    const previewContainer = document.getElementById('exifPreviewContainer');
+    const previewImage = document.getElementById('exifPreviewImage');
+    const uploadArea = document.getElementById('exifUploadArea');
+    const controlsSection = document.getElementById('exifControlsSection');
+
+    previewImage.src = `data:${exifMimeType};base64,${exifBase64}`;
+
+    uploadArea.style.display = 'none';
+    previewContainer.style.display = 'block';
+    controlsSection.style.display = 'block';
+  } catch (error) {
+    showToast('Failed to load image', 'error');
+  }
+}
+
+function clearExifForm() {
+  exifFile = null;
+  exifMimeType = null;
+  exifBase64 = null;
+
+  document.getElementById('exifUploadArea').style.display = 'block';
+  document.getElementById('exifPreviewContainer').style.display = 'none';
+  document.getElementById('exifControlsSection').style.display = 'none';
+  document.getElementById('exifResultsSection').style.display = 'none';
+  document.getElementById('exifFileInput').value = '';
+}
+
+async function extractExif() {
+  if (!exifBase64 || !exifMimeType) {
+    showToast('Please upload an image first', 'error');
+    return;
+  }
+
+  const priority = parseInt(document.querySelector('input[name="exifPriority"]:checked').value);
+  const requestBody = {
+    image: exifBase64,
+    mimeType: exifMimeType,
+    priority
+  };
+
+  showLoading(true);
+
+  try {
+    const response = await fetch(`${API_BASE}/exif`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(requestBody)
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || 'EXIF extraction failed');
+    }
+
+    const result = await response.json();
+    displayExifResult(result);
+    showToast('EXIF data extracted successfully!', 'success');
+  } catch (error) {
+    showToast(error.message || 'Failed to extract EXIF data', 'error');
+  } finally {
+    showLoading(false);
+  }
+}
+
+function displayExifResult(result) {
+  const resultsSection = document.getElementById('exifResultsSection');
+  const exifData = document.getElementById('exifData');
+
+  // Display EXIF data
+  exifData.innerHTML = `<pre>${JSON.stringify(result.exif, null, 2)}</pre>`;
+
+  // Show results
+  document.getElementById('exifControlsSection').style.display = 'none';
+  resultsSection.style.display = 'block';
+}
+
+// Utility Functions
+async function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const base64 = reader.result.split(',')[1];
+      resolve(base64);
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+function formatBytes(bytes) {
+  if (bytes === 0) return '0 Bytes';
+  const k = 1024;
+  const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + ' ' + sizes[i];
+}
+
+function showLoading(show) {
+  const overlay = document.getElementById('loadingOverlay');
+  overlay.style.display = show ? 'flex' : 'none';
+}
+
+function showToast(message, type = 'info') {
+  const toast = document.getElementById('toast');
+  toast.textContent = message;
+  toast.className = `toast ${type}`;
+  toast.classList.add('show');
+
+  setTimeout(() => {
+    toast.classList.remove('show');
+  }, 3000);
+}

@@ -7,5 +7,7 @@ import { QueueService } from './services/queue.service.js';
 @Module({
   controllers: [ImageProcessingController],
   providers: [ImageProcessorService, ExifService, QueueService],
+  exports: [QueueService],
 })
 export class ImageProcessingModule {}
+
