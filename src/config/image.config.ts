@@ -1,7 +1,7 @@
 import { registerAs } from '@nestjs/config';
 
 export default registerAs('image', () => ({
-  maxBytes: parseInt(process.env.IMAGE_MAX_BYTES_MB || '25', 10) * 1024 * 1024,
+  maxBytes: parseInt(process.env.FILE_MAX_BYTES_MB || '25', 10) * 1024 * 1024,
 
   queue: {
     maxConcurrency: parseInt(process.env.HEAVY_TASKS_MAX_CONCURRENCY || '4', 10),
@@ -9,25 +9,26 @@ export default registerAs('image', () => ({
   },
 
   defaults: {
-    format: process.env.IMAGE_DEFAULT_FORMAT || 'webp',
-    maxDimension: parseInt(process.env.IMAGE_DEFAULT_MAX_DIMENSION || '3840', 10),
-    quality: parseInt(process.env.IMAGE_DEFAULT_QUALITY || '80', 10),
-    effort: parseInt(process.env.IMAGE_DEFAULT_EFFORT || '6', 10),
-    lossless: process.env.IMAGE_DEFAULT_LOSSLESS === 'true',
-    stripMetadata: process.env.IMAGE_DEFAULT_STRIP_METADATA === 'true',
-    autoOrient: process.env.IMAGE_DEFAULT_AUTO_ORIENT !== 'false',
+    format: 'webp',
+    maxDimension: 3840,
+    quality: 80,
+    effort: 6,
+    lossless: false,
+    stripMetadata: false,
+    autoOrient: true,
   },
 
   avif: {
-    chromaSubsampling: process.env.IMAGE_AVIF_CHROMA_SUBSAMPLING || '4:2:0',
+    chromaSubsampling: '4:2:0',
   },
 
   jpeg: {
-    progressive: process.env.IMAGE_JPEG_PROGRESSIVE === 'true',
-    mozjpeg: process.env.IMAGE_JPEG_MOZJPEG === 'true',
+    progressive: false,
+    mozjpeg: false,
+    chromaSubsampling: '4:2:0',
   },
 
   png: {
-    compressionLevel: parseInt(process.env.IMAGE_PNG_COMPRESSION_LEVEL || '6', 10),
+    compressionLevel: 6,
   },
 }));

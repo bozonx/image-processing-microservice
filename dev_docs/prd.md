@@ -317,7 +317,7 @@ Health check endpoint.
 - Конфликтующие параметры (например, maxDimension и width/height одновременно)
 
 #### 3.3.2 Ошибки Лимита Размера (413)
-- Изображение превышает `IMAGE_MAX_BYTES_MB`
+- Изображение превышает `FILE_MAX_BYTES_MB`
 - Размеры превышают максимально допустимые
 
 #### 3.3.3 Ошибки Таймаута (408)
@@ -371,7 +371,7 @@ Health check endpoint.
 
 #### 4.2.2 Вертикальное Масштабирование
 - `HEAVY_TASKS_MAX_CONCURRENCY` должен соответствовать количеству CPU ядер
-- Память масштабируется как `IMAGE_MAX_BYTES_MB` × `CONCURRENCY`
+- Память масштабируется как `FILE_MAX_BYTES_MB` × `CONCURRENCY`
 
 ---
 
@@ -449,7 +449,7 @@ LOG_LEVEL=info                        # trace|debug|info|warn|error|fatal|silent
 TZ=UTC                                # Часовой пояс
 
 # Лимиты Обработки
-IMAGE_MAX_BYTES_MB=25                 # Максимальный размер изображения в MB
+FILE_MAX_BYTES_MB=25                 # Максимальный размер изображения в MB
 HEAVY_TASKS_MAX_CONCURRENCY=4         # Параллельные задачи обработки
 HEAVY_TASKS_QUEUE_TIMEOUT_MS=30000    # Таймаут задачи в миллисекундах
 
@@ -629,7 +629,7 @@ SHUTDOWN_TIMEOUT_MS=30000             # Таймаут graceful shutdown
 #### 8.2.3 Рекомендации по Масштабированию
 - 1 инстанс на 4 CPU ядра
 - `HEAVY_TASKS_MAX_CONCURRENCY` = количество CPU ядер
-- Memory = 1GB + (IMAGE_MAX_BYTES_MB × CONCURRENCY × 2)
+- Memory = 1GB + (FILE_MAX_BYTES_MB × CONCURRENCY × 2)
 
 ---
 

@@ -73,14 +73,14 @@ export class TransformDto {
 
   @IsOptional()
   @IsBoolean()
-  autoRotate?: boolean;
+  autoOrient?: boolean;
 
   /**
-   * @deprecated Use autoRotate instead
+   * @deprecated Use autoOrient instead
    */
   @IsOptional()
   @IsBoolean()
-  autoOrient?: boolean;
+  autoRotate?: boolean;
 
   @IsOptional()
   @IsNumber()

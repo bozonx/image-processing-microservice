@@ -43,9 +43,8 @@ export class ImageProcessorService {
       let pipeline = sharp(inputBuffer);
 
       // Auto-orient (EXIF)
-      // autoRotate is the new name, autoOrient is for backward compatibility
-      const autoRotate = dto.transform?.autoRotate ?? dto.transform?.autoOrient ?? this.defaults.autoRotate ?? this.defaults.autoOrient;
-      if (autoRotate) {
+      const autoOrient = dto.transform?.autoOrient ?? dto.transform?.autoRotate ?? this.defaults.autoOrient;
+      if (autoOrient) {
         pipeline = pipeline.rotate();
       }
 
@@ -125,6 +124,7 @@ export class ImageProcessorService {
             quality,
             progressive: dto.output?.progressive ?? this.configService.get('image.jpeg.progressive', false),
             mozjpeg: dto.output?.mozjpeg ?? this.configService.get('image.jpeg.mozjpeg', false),
+            chromaSubsampling: dto.output?.chromaSubsampling ?? this.configService.get('image.jpeg.chromaSubsampling', '4:2:0'),
           });
           break;
         case 'png':

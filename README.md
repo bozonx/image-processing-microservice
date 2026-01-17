@@ -8,7 +8,7 @@
 - ✅ Извлечение EXIF метаданных
 - ✅ Изменение размера с различными режимами fit
 - ✅ Обрезка, поворот, отзеркаливание
-- ✅ Автоповорот на основе EXIF
+- ✅ Автоповорот на основе EXIF (autoOrient)
 - ✅ Управление очередью задач с приоритетами
 - ✅ Graceful shutdown
 
@@ -83,7 +83,8 @@ docker compose -f docker/docker-compose.yml up -d --build
 | :--- | :--- | :--- |
 | `resize` | `object` | Изменение размера. Поля: `width`, `height`, `maxDimension`, `fit`, `withoutEnlargement`, `position`. |
 | `crop` | `object` | Обрезка. Поля: `left`, `top`, `width`, `height`. |
-| `autoRotate` | `boolean` | Автоматический поворот и отзеркаливание на основе EXIF данных. Выполняется **до** остальных трансформаций. Если включено, сбрасывает тег ориентации EXIF. Если выключено — EXIF данные игнорируются. |
+| `autoOrient` | `boolean` | Автоматический поворот и отзеркаливание на основе EXIF данных. Выполняется **до** остальных трансформаций. Если включено, сбрасывает тег ориентации EXIF. Если выключено — EXIF данные игнорируются. |
+| `autoRotate` | `boolean` | **Устарело.** Используйте `autoOrient`. |
 | `rotate` | `number` | Явный поворот на угол в градусах (-360 до 360). Применяется **после** `autoRotate`. |
 | `flip` | `boolean` | Отзеркалить по вертикали. Применяется **после** `autoRotate`. |
 | `flop` | `boolean` | Отзеркалить по горизонтали. Применяется **после** `autoRotate`. |
@@ -98,6 +99,7 @@ docker compose -f docker/docker-compose.yml up -d --build
   - `inside`: Сохраняет пропорции, делает изображение максимально большим, чтобы оно не выходило за границы.
   - `outside`: Сохраняет пропорции, делает изображение максимально маленьким, чтобы оно полностью закрывало границы.
 - `withoutEnlargement` (boolean): Не увеличивать изображение, если оно меньше целевых размеров. По умолчанию: `true`.
+- `autoOrient` (boolean): Автоматический поворот и отзеркаливание на основе EXIF Meta данных (Orientation tag). По умолчанию: `true`.
 - `position` (string): Точка привязки для `cover` или `contain`:
   - Направления: `center` (по умолчанию), `top`, `right`, `bottom`, `left`, `right top`, `right bottom`, `left bottom`, `left top`.
   - Стратегии обрезки: `entropy` (по фокусу на детализации), `attention` (по наиболее значимой области).
@@ -117,7 +119,7 @@ docker compose -f docker/docker-compose.yml up -d --build
 | `progressive` | `boolean` | Использовать прогрессивную развертку (для JPEG). |
 | `mozjpeg` | `boolean` | Использовать библиотеку mozjpeg для лучшего сжатия (для JPEG). |
 | `compressionLevel` | `number` | Уровень сжатия (0-9) для PNG. Чем выше, тем медленнее, но файл меньше. |
-| `chromaSubsampling` | `string` | Цветовая субдискретизация для AVIF (например, `4:2:0`, `4:4:4`). |
+| `chromaSubsampling` | `string` | Цветовая субдискретизация для AVIF и JPEG (например, `4:2:0`, `4:4:4`). |
 
 **Пример запроса:**
 ```json
@@ -131,7 +133,7 @@ docker compose -f docker/docker-compose.yml up -d --build
       "height": 600,
       "fit": "cover"
     },
-    "autoRotate": true
+    "autoOrient": true
   },
   "output": {
     "format": "webp",
@@ -214,10 +216,9 @@ docker compose -f docker/docker-compose.yml up -d --build
 
 - `LISTEN_PORT` - Порт сервиса (default: 3000)
 - `LOG_LEVEL` - Уровень логирования (default: info)
-- `IMAGE_MAX_BYTES_MB` - Максимальный размер изображения в MB (default: 25)
+- `FILE_MAX_BYTES_MB` - Максимальный размер входного файла в MB (default: 25)
 - `HEAVY_TASKS_MAX_CONCURRENCY` - Количество параллельных задач (default: 4)
-- `IMAGE_DEFAULT_FORMAT` - Формат по умолчанию (default: webp)
-- `IMAGE_DEFAULT_QUALITY` - Качество по умолчанию (default: 80)
+- `HEAVY_TASKS_QUEUE_TIMEOUT_MS` - Таймаут ожидания в очереди в мс (default: 30000)
 
 ## Тестирование
 
