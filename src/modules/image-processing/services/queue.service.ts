@@ -1,4 +1,4 @@
-import { Injectable, OnModuleDestroy, Logger, ServiceUnavailableException } from '@nestjs/common';
+import { Injectable, OnModuleDestroy, Logger, ServiceUnavailableException, RequestTimeoutException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import PQueue from 'p-queue';
 
@@ -33,14 +33,15 @@ export class QueueService implements OnModuleDestroy {
     }
 
     const startTime = Date.now();
+    let timeoutHandle: NodeJS.Timeout | undefined;
 
     try {
       const taskPromise = this.queue.add(task, { priority });
 
       // Create a timeout promise
       const timeoutPromise = new Promise<never>((_, reject) => {
-        setTimeout(() => {
-          reject(new Error('Request timeout'));
+        timeoutHandle = setTimeout(() => {
+          reject(new RequestTimeoutException('Request timeout'));
         }, this.requestTimeout);
       });
 
@@ -65,6 +66,10 @@ export class QueueService implements OnModuleDestroy {
         error: errorMessage,
       });
       throw error;
+    } finally {
+      if (timeoutHandle) {
+        clearTimeout(timeoutHandle);
+      }
     }
   }
 

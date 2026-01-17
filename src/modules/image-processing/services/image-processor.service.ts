@@ -1,7 +1,7 @@
 import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import sharp from 'sharp';
-import { ProcessImageDto } from '../dto/process-image.dto.js';
+import { ProcessImageDto, TransformDto, OutputDto } from '../dto/process-image.dto.js';
 
 @Injectable()
 export class ImageProcessorService {
@@ -21,147 +21,24 @@ export class ImageProcessorService {
     dimensions: { width: number; height: number };
     stats?: { beforeBytes: number; afterBytes: number; reductionPercent: number };
   }> {
-    // Decode base64
-    const inputBuffer = Buffer.from(dto.image, 'base64');
-
-    // Check size
-    if (inputBuffer.length > this.maxBytes) {
-      throw new BadRequestException(
-        `Image size ${inputBuffer.length} bytes exceeds maximum ${this.maxBytes} bytes`,
-      );
-    }
-
-    // Check MIME type
-    if (!dto.mimeType.startsWith('image/')) {
-      throw new BadRequestException(`Invalid MIME type: ${dto.mimeType}`);
-    }
-
+    const inputBuffer = this.validateImage(dto.image, dto.mimeType);
     const startTime = Date.now();
     const beforeBytes = inputBuffer.length;
 
     try {
-      const options: sharp.SharpOptions = {};
-      if (dto.mimeType === 'image/gif') {
-        options.animated = true;
-      }
+      const options = this.getSharpOptions(dto.mimeType);
       let pipeline = sharp(inputBuffer, options);
 
-      // Auto-orient (EXIF)
-      const autoOrient = dto.transform?.autoOrient ?? this.defaults.autoOrient;
-      if (autoOrient) {
-        pipeline = pipeline.rotate();
-      }
+      pipeline = this.applyTransformations(pipeline, dto.transform);
+      pipeline = this.applyOutputFormat(pipeline, dto.output);
 
-      // Crop
-      if (dto.transform?.crop) {
-        pipeline = pipeline.extract(dto.transform.crop);
-      }
-
-      // Resize
-      if (dto.transform?.resize) {
-        const resize = dto.transform.resize;
-
-        // Validation: cannot use maxDimension and width/height together
-        if (resize.maxDimension && (resize.width || resize.height)) {
-          throw new BadRequestException(
-            'Cannot use maxDimension together with width/height',
-          );
-        }
-
-        if (resize.maxDimension) {
-          // Proportional resize
-          pipeline = pipeline.resize(resize.maxDimension, resize.maxDimension, {
-            fit: resize.fit || 'inside',
-            withoutEnlargement: resize.withoutEnlargement ?? true,
-          });
-        } else if (resize.width || resize.height) {
-          // Exact dimensions
-          pipeline = pipeline.resize(resize.width, resize.height, {
-            fit: resize.fit || 'inside',
-            withoutEnlargement: resize.withoutEnlargement ?? true,
-            position: resize.position as any,
-          });
-        }
-      }
-
-      // Flip/Flop
-      if (dto.transform?.flip) {
-        pipeline = pipeline.flip();
-      }
-      if (dto.transform?.flop) {
-        pipeline = pipeline.flop();
-      }
-
-      // Custom Rotate
-      if (dto.transform?.rotate !== undefined) {
-        pipeline = pipeline.rotate(dto.transform.rotate);
-      }
-      
-      // Background color (flatten)
-      if (dto.transform?.backgroundColor) {
-        pipeline = pipeline.flatten({ background: dto.transform.backgroundColor });
-      }
-
-      // Output format
-      const format = dto.output?.format || this.defaults.format;
-      const quality = dto.output?.quality ?? this.defaults.quality;
-      const stripMetadata = dto.output?.stripMetadata ?? this.defaults.stripMetadata;
-
-      if (stripMetadata) {
-        pipeline = pipeline.withMetadata({ orientation: undefined });
-      }
-
-      // Format-specific options
-      switch (format) {
-        case 'webp':
-          pipeline = pipeline.webp({
-            quality,
-            lossless: dto.output?.lossless ?? this.defaults.lossless,
-            effort: dto.output?.effort ?? this.defaults.effort,
-          });
-          break;
-        case 'avif':
-          pipeline = pipeline.avif({
-            quality,
-            lossless: dto.output?.lossless ?? this.defaults.lossless,
-            effort: dto.output?.effort ?? this.defaults.effort,
-            chromaSubsampling: dto.output?.chromaSubsampling ?? this.configService.get('image.avif.chromaSubsampling', '4:2:0'),
-          });
-          break;
-        case 'jpeg':
-          pipeline = pipeline.jpeg({
-            quality,
-            progressive: dto.output?.progressive ?? this.configService.get('image.jpeg.progressive', false),
-            mozjpeg: dto.output?.mozjpeg ?? this.configService.get('image.jpeg.mozjpeg', false),
-            chromaSubsampling: dto.output?.chromaSubsampling ?? this.configService.get('image.jpeg.chromaSubsampling', '4:2:0'),
-          });
-          break;
-        case 'png':
-          pipeline = pipeline.png({
-            compressionLevel: dto.output?.compressionLevel ?? this.configService.get('image.png.compressionLevel', 6),
-            palette: dto.output?.palette ?? (dto.output?.quality !== undefined),
-            quality: dto.output?.quality,
-            effort: dto.output?.effort ?? this.defaults.effort,
-            colors: dto.output?.colors,
-            dither: dto.output?.dither,
-            adaptiveFiltering: dto.output?.adaptiveFiltering,
-          });
-          break;
-        case 'gif':
-          pipeline = pipeline.gif();
-          break;
-        case 'tiff':
-          pipeline = pipeline.tiff({ quality });
-          break;
-        default:
-          throw new BadRequestException(`Unsupported format: ${format}`);
-      }
-
-      // Execute processing
       const resultBuffer = await pipeline.toBuffer({ resolveWithObject: true });
       const afterBytes = resultBuffer.data.length;
       const duration = Date.now() - startTime;
 
+      // Ensure we have correct format name for response (e.g. 'jpeg' instead of undefined)
+      const outputFormat = dto.output?.format || this.defaults.format || resultBuffer.info.format;
+      
       const stats = {
         beforeBytes,
         afterBytes,
@@ -172,8 +49,8 @@ export class ImageProcessorService {
         msg: 'Image processed',
         duration,
         ...stats,
-        format,
-        quality,
+        format: outputFormat,
+        quality: dto.output?.quality ?? this.defaults.quality,
         dimensions: {
           width: resultBuffer.info.width,
           height: resultBuffer.info.height,
@@ -183,7 +60,7 @@ export class ImageProcessorService {
       return {
         buffer: resultBuffer.data,
         size: afterBytes,
-        mimeType: `image/${format}`,
+        mimeType: `image/${outputFormat}`,
         dimensions: {
           width: resultBuffer.info.width,
           height: resultBuffer.info.height,
@@ -201,6 +78,147 @@ export class ImageProcessorService {
       });
 
       throw error;
+    }
+  }
+
+  private validateImage(base64Image: string, mimeType: string): Buffer {
+    if (!mimeType.startsWith('image/')) {
+      throw new BadRequestException(`Invalid MIME type: ${mimeType}`);
+    }
+
+    const buffer = Buffer.from(base64Image, 'base64');
+    if (buffer.length > this.maxBytes) {
+      throw new BadRequestException(
+        `Image size ${buffer.length} bytes exceeds maximum ${this.maxBytes} bytes`,
+      );
+    }
+
+    return buffer;
+  }
+
+  private getSharpOptions(mimeType: string): sharp.SharpOptions {
+    const options: sharp.SharpOptions = {};
+    if (mimeType === 'image/gif') {
+      options.animated = true;
+    }
+    return options;
+  }
+
+  private applyTransformations(pipeline: sharp.Sharp, transform?: TransformDto): sharp.Sharp {
+    if (!transform) {
+      // Apply defaults if no transform provided?
+      // Logic in previous code: const autoOrient = dto.transform?.autoOrient ?? this.defaults.autoOrient;
+      // This implies checking defaults even if transform is undefined, but only if we process "autoOrient".
+      // But typically "autoOrient" default is true. 
+      // So we should probably check it.
+      // However, if transform is undefined, existing logic effectively does:
+      // autoOrient = undefined ?? default.
+      // So yes, we need to handle default autoOrient even if transform is undefined.
+      
+      const defaultAutoOrient = this.defaults.autoOrient;
+      if (defaultAutoOrient) {
+        return pipeline.rotate();
+      }
+      return pipeline;
+    }
+
+    // Auto-orient
+    const autoOrient = transform.autoOrient ?? this.defaults.autoOrient;
+    if (autoOrient) {
+      pipeline = pipeline.rotate();
+    }
+
+    // Crop
+    if (transform.crop) {
+      pipeline = pipeline.extract(transform.crop);
+    }
+
+    // Resize
+    if (transform.resize) {
+      const { resize } = transform;
+
+      // Validation
+      if (resize.maxDimension && (resize.width || resize.height)) {
+        throw new BadRequestException('Cannot use maxDimension together with width/height');
+      }
+
+      if (resize.maxDimension) {
+        pipeline = pipeline.resize(resize.maxDimension, resize.maxDimension, {
+          fit: resize.fit || 'inside',
+          withoutEnlargement: resize.withoutEnlargement ?? true,
+        });
+      } else if (resize.width || resize.height) {
+        pipeline = pipeline.resize(resize.width, resize.height, {
+          fit: resize.fit || 'inside',
+          withoutEnlargement: resize.withoutEnlargement ?? true,
+          position: resize.position as any,
+        });
+      }
+    }
+
+    // Flip/Flop
+    if (transform.flip) pipeline = pipeline.flip();
+    if (transform.flop) pipeline = pipeline.flop();
+
+    // Custom Rotate
+    if (transform.rotate !== undefined) {
+      pipeline = pipeline.rotate(transform.rotate);
+    }
+
+    // Background color
+    if (transform.backgroundColor) {
+      pipeline = pipeline.flatten({ background: transform.backgroundColor });
+    }
+
+    return pipeline;
+  }
+
+  private applyOutputFormat(pipeline: sharp.Sharp, output?: OutputDto): sharp.Sharp {
+    const format = output?.format || this.defaults.format;
+    const quality = output?.quality ?? this.defaults.quality;
+    const stripMetadata = output?.stripMetadata ?? this.defaults.stripMetadata;
+
+    if (stripMetadata) {
+      pipeline = pipeline.withMetadata({ orientation: undefined });
+    }
+
+    switch (format) {
+      case 'webp':
+        return pipeline.webp({
+          quality,
+          lossless: output?.lossless ?? this.defaults.lossless,
+          effort: output?.effort ?? this.defaults.effort,
+        });
+      case 'avif':
+        return pipeline.avif({
+          quality,
+          lossless: output?.lossless ?? this.defaults.lossless,
+          effort: output?.effort ?? this.defaults.effort,
+          chromaSubsampling: output?.chromaSubsampling ?? this.configService.get('image.avif.chromaSubsampling', '4:2:0'),
+        });
+      case 'jpeg':
+        return pipeline.jpeg({
+          quality,
+          progressive: output?.progressive ?? this.configService.get('image.jpeg.progressive', false),
+          mozjpeg: output?.mozjpeg ?? this.configService.get('image.jpeg.mozjpeg', false),
+          chromaSubsampling: output?.chromaSubsampling ?? this.configService.get('image.jpeg.chromaSubsampling', '4:2:0'),
+        });
+      case 'png':
+        return pipeline.png({
+          compressionLevel: output?.compressionLevel ?? this.configService.get('image.png.compressionLevel', 6),
+          palette: output?.palette ?? (output?.quality !== undefined),
+          quality: output?.quality,
+          effort: output?.effort ?? this.defaults.effort,
+          colors: output?.colors,
+          dither: output?.dither,
+          adaptiveFiltering: output?.adaptiveFiltering,
+        });
+      case 'gif':
+        return pipeline.gif();
+      case 'tiff':
+        return pipeline.tiff({ quality });
+      default:
+        throw new BadRequestException(`Unsupported format: ${format}`);
     }
   }
 }
