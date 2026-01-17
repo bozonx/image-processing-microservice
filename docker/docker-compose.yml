@@ -1,20 +1,25 @@
 services:
-  microservice:
-    image: ghcr.io/bozonx/nestjs-boilerplate:latest
-    container_name: nestjs-boilerplate
-    hostname: nestjs-boilerplate
+  image-processing:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: image-processing-microservice
+    hostname: image-processing
     restart: unless-stopped
     stop_grace_period: 30s
-    user: '1000:1000'
     ports:
-      - '8080:8080'
+      - '3000:3000'
     environment:
+      - NODE_ENV=production
+      - LISTEN_HOST=0.0.0.0
+      - LISTEN_PORT=3000
+      - LOG_LEVEL=info
       - TZ=UTC
-      - BASE_PATH=
-      - LOG_LEVEL=warn
+    env_file:
+      - ../.env.production
     healthcheck:
-      test: [ 'CMD-SHELL', 'wget -qO- http://127.0.0.1:8080/api/v1/health || exit 1' ]
+      test: [ "CMD", "node", "-e", "require('http').get('http://localhost:3000/api/v1/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})" ]
       interval: 30s
-      timeout: 3s
+      timeout: 5s
       retries: 3
-      start_period: 5s
+      start_period: 10s
