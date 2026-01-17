@@ -61,48 +61,71 @@ pnpm build
 2. Запуск через Docker Compose:
 ```bash
 docker compose -f docker/docker-compose.yml up -d --build
-```
-
-Сервис будет доступен по адресу: `http://localhost:3000/api/v1`
-
 ## API Endpoints
 
 ### POST /api/v1/process
 
-Обработка изображения с применением трансформаций и конвертации.
+Основной эндпоинт для обработки изображений. Позволяет изменять размер, обрезать, поворачивать и конвертировать изображения в различные форматы.
 
-**Параметры запроса:**
-- `image` (Buffer | base64) - Изображение для обработки
-- `mimeType` (string) - MIME тип входного изображения
-- `priority` (number, optional) - Приоритет задачи (0-2, default: 2)
-- `transform` (object, optional) - Параметры трансформации
-- `output` (object, optional) - Параметры выходного изображения
+**Параметры запроса (JSON):**
+
+| Параметр | Тип | Описание |
+| :--- | :--- | :--- |
+| `image` | `string` | **Обязательно.** Изображение в формате Base64. |
+| `mimeType` | `string` | **Обязательно.** MIME-тип входного изображения (например, `image/jpeg`). |
+| `priority` | `number` | Приоритет задачи: `0` (высокий), `1` (средний), `2` (низкий). По умолчанию: `2`. |
+| `transform` | `object` | Параметры трансформации (см. ниже). |
+| `output` | `object` | Параметры выходного формата (см. ниже). |
+
+#### Объект `transform` (Трансформации):
+
+| Поле | Тип | Описание |
+| :--- | :--- | :--- |
+| `resize` | `object` | Изменение размера. Поля: `width`, `height`, `maxDimension`, `fit`, `withoutEnlargement`, `position`. |
+| `crop` | `object` | Обрезка. Поля: `left`, `top`, `width`, `height`. |
+| `autoRotate` | `boolean` | Автоматический поворот на основе EXIF данных. |
+| `rotate` | `number` | Явный поворот на угол в градусах (-360 до 360). |
+| `flip` | `boolean` | Отзеркалить по вертикали. |
+| `flop` | `boolean` | Отзеркалить по горизонтали. |
+
+**Детали `resize`:**
+- `maxDimension` (number): Ограничение большей стороны (пропорции сохраняются).
+- `width` / `height` (number): Явное указание размеров.
+- `fit` (string): Режим вписывания: `cover`, `contain`, `fill`, `inside`, `outside`.
+- `withoutEnlargement` (boolean): Не увеличивать, если исходник меньше.
+- `position` (string): Точка привязки (например, `center`, `top`, `entropy`).
+
+**Детали `crop`:**
+- `left`, `top`, `width`, `height` (number): Координаты и размеры области обрезки.
+
+#### Объект `output` (Вывод):
+
+| Поле | Тип | Описание |
+| :--- | :--- | :--- |
+| `format` | `string` | Выходной формат: `webp`, `avif`, `jpeg`, `png`, `gif`, `tiff`. |
+| `quality` | `number` | Качество сжатия (1-100). |
+| `lossless` | `boolean` | Использовать ли сжатие без потерь (для WebP/AVIF). |
+| `stripMetadata` | `boolean` | Удалить метаданные (EXIF и др.). |
+| `effort` | `number` | Уровень усилий при сжатии (0-9). Чем выше, тем медленнее, но файл меньше. |
 
 **Пример запроса:**
 ```json
 {
-  "image": "base64_encoded_image",
-  "mimeType": "image/jpeg",
+  "image": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+  "mimeType": "image/png",
   "priority": 1,
   "transform": {
     "resize": {
-      "width": 1000,
-      "height": 1000,
+      "width": 800,
+      "height": 600,
       "fit": "cover"
     },
-    "crop": {
-      "left": 100,
-      "top": 100,
-      "width": 500,
-      "height": 500
-    },
-    "rotate": 90,
-    "flip": true,
     "autoRotate": true
   },
   "output": {
     "format": "webp",
-    "quality": 85
+    "quality": 85,
+    "stripMetadata": true
   }
 }
 ```
@@ -110,38 +133,34 @@ docker compose -f docker/docker-compose.yml up -d --build
 **Ответ:**
 ```json
 {
-  "buffer": "base64_encoded_result",
-  "size": 123456,
+  "buffer": "...", // Результирующее изображение в Base64
+  "size": 42560,
   "mimeType": "image/webp",
   "dimensions": {
-    "width": 1920,
-    "height": 1080
+    "width": 800,
+    "height": 600
   },
   "stats": {
-    "beforeBytes": 500000,
-    "afterBytes": 123456,
-    "reductionPercent": 75.3
+    "beforeBytes": 125000,
+    "afterBytes": 42560,
+    "reductionPercent": 65.95
   }
 }
 ```
 
+---
+
 ### POST /api/v1/exif
 
-Извлечение EXIF метаданных из изображения.
+Извлечение метаданных EXIF без обработки самого изображения.
 
-**Параметры запроса:**
-- `image` (Buffer | base64) - Изображение
-- `mimeType` (string) - MIME тип изображения
-- `priority` (number, optional) - Приоритет задачи (0-2, default: 2)
+**Параметры запроса (JSON):**
 
-**Пример запроса:**
-```json
-{
-  "image": "base64_encoded_image",
-  "mimeType": "image/jpeg",
-  "priority": 0
-}
-```
+| Параметр | Тип | Описание |
+| :--- | :--- | :--- |
+| `image` | `string` | **Обязательно.** Изображение в формате Base64. |
+| `mimeType` | `string` | **Обязательно.** MIME-тип входного изображения (например, `image/jpeg`). |
+| `priority` | `number` | Приоритет задачи: `0` (высокий), `1` (средний), `2` (низкий). |
 
 **Ответ:**
 ```json
@@ -152,10 +171,13 @@ docker compose -f docker/docker-compose.yml up -d --build
     "DateTimeOriginal": "2024:01:15 14:30:00",
     "ExposureTime": 0.004,
     "FNumber": 2.8,
-    "ISO": 400
+    "ISO": 400,
+    "Orientation": 1
   }
 }
 ```
+
+---
 
 ### GET /api/v1/health
 
