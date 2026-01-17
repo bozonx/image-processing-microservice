@@ -117,18 +117,19 @@ export class ImageProcessorService {
             quality,
             lossless: dto.output?.lossless ?? this.defaults.lossless,
             effort: dto.output?.effort ?? this.defaults.effort,
+            chromaSubsampling: dto.output?.chromaSubsampling ?? this.configService.get('image.avif.chromaSubsampling', '4:2:0'),
           });
           break;
         case 'jpeg':
           pipeline = pipeline.jpeg({
             quality,
-            progressive: this.configService.get('image.jpeg.progressive', false),
-            mozjpeg: this.configService.get('image.jpeg.mozjpeg', false),
+            progressive: dto.output?.progressive ?? this.configService.get('image.jpeg.progressive', false),
+            mozjpeg: dto.output?.mozjpeg ?? this.configService.get('image.jpeg.mozjpeg', false),
           });
           break;
         case 'png':
           pipeline = pipeline.png({
-            compressionLevel: this.configService.get('image.png.compressionLevel', 6),
+            compressionLevel: dto.output?.compressionLevel ?? this.configService.get('image.png.compressionLevel', 6),
           });
           break;
         case 'gif':

@@ -121,6 +121,24 @@ export class OutputDto {
   @Min(0)
   @Max(9)
   effort?: number;
+
+  @IsOptional()
+  @IsBoolean()
+  progressive?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  mozjpeg?: boolean;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(9)
+  compressionLevel?: number;
+
+  @IsOptional()
+  @IsString()
+  chromaSubsampling?: string;
 }
 
 export class ProcessImageDto {
