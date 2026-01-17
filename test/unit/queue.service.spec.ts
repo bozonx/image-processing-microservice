@@ -85,4 +85,31 @@ describe('QueueService', () => {
     // Expect: blocker finishes, then high priority, then low priority
     expect(results).toEqual(['blocker', 'high', 'low']);
   });
+  it('should reject new tasks when service is shutting down', async () => {
+    // Trigger shutdown
+    await service.onModuleDestroy();
+
+    const task = jest.fn<(() => Promise<string>)>().mockResolvedValue('result');
+
+    await expect(service.add(task)).rejects.toThrow('Service is shutting down');
+    expect(task).not.toHaveBeenCalled();
+  });
+
+  it('should wait for active tasks to complete on shutdown', async () => {
+    const results: string[] = [];
+    // Create a task that takes some time
+    const slowTask = async () => {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      results.push('completed');
+      return 'done';
+    };
+
+    // Add task and immediately trigger shutdown
+    const taskPromise = service.add(slowTask);
+    const shutdownPromise = service.onModuleDestroy();
+
+    await Promise.all([taskPromise, shutdownPromise]);
+
+    expect(results).toContain('completed');
+  });
 });

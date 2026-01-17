@@ -297,4 +297,24 @@ describe('ImageProcessorService', () => {
     expect(result.dimensions.width).toBe(500);
     expect(result.dimensions.height).toBe(300);
   });
+  it('should fail for corrupt image data', async () => {
+    // Valid base64, but invalid content
+    const corruptBuffer = Buffer.from('not an image');
+    
+    await expect(
+      service.process({
+        image: corruptBuffer.toString('base64'),
+        mimeType: 'image/jpeg',
+      }),
+    ).rejects.toThrow();
+  });
+
+  it('should fail for empty image buffer', async () => {
+    await expect(
+      service.process({
+        image: '',
+        mimeType: 'image/jpeg',
+      }),
+    ).rejects.toThrow(); 
+  });
 });

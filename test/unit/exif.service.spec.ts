@@ -80,4 +80,11 @@ describe('ExifService', () => {
       service.extract(buffer, 'text/plain'),
     ).rejects.toThrow('Invalid MIME type');
   });
+
+
+  it('should handle corrupt buffer gracefully during extraction', async () => {
+    const corruptBuffer = Buffer.from('not an image');
+    const result = await service.extract(corruptBuffer, 'image/jpeg');
+    expect(result).toBeNull();
+  });
 });
