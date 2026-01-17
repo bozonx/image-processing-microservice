@@ -88,6 +88,7 @@ docker compose -f docker/docker-compose.yml up -d --build
 | `rotate` | `number` | Явный поворот на угол в градусах (-360 до 360). Применяется **после** `autoOrient`. |
 | `flip` | `boolean` | Отзеркалить по вертикали. Применяется **после** `autoOrient`. |
 | `flop` | `boolean` | Отзеркалить по горизонтали. Применяется **после** `autoOrient`. |
+| `backgroundColor` | `string` | Цвет фона (hex, name). Используется для удаления прозрачности (наложения на фон). |
 
 **Детали `resize`:**
 - `maxDimension` (number): Ограничение большей стороны (пропорции сохраняются). Нельзя использовать вместе с `width`/`height`.

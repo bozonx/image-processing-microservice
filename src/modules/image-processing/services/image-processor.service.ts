@@ -96,6 +96,11 @@ export class ImageProcessorService {
       if (dto.transform?.rotate !== undefined) {
         pipeline = pipeline.rotate(dto.transform.rotate);
       }
+      
+      // Background color (flatten)
+      if (dto.transform?.backgroundColor) {
+        pipeline = pipeline.flatten({ background: dto.transform.backgroundColor });
+      }
 
       // Output format
       const format = dto.output?.format || this.defaults.format;

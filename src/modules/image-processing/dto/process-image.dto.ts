@@ -88,6 +88,10 @@ export class TransformDto {
   @IsOptional()
   @IsBoolean()
   flop?: boolean;
+
+  @IsOptional()
+  @IsString()
+  backgroundColor?: string;
 }
 
 export class OutputDto {
