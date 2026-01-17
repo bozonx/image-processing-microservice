@@ -18,13 +18,13 @@ export class ExifService {
 
   /**
    * Extracts EXIF metadata from an image buffer.
-   * 
+   *
    * @param buffer - The image data as a Buffer.
    * @param mimeType - The MIME type of the image.
    * @returns A record of EXIF data or null if extraction fails or no data is found.
    * @throws Error if the image size exceeds the limit.
    */
-  async extract(buffer: Buffer, mimeType: string): Promise<Record<string, any> | null> {
+  public async extract(buffer: Buffer, mimeType: string): Promise<Record<string, any> | null> {
     // Check size
     if (buffer.length > this.maxBytes) {
       throw new Error(`Image size ${buffer.length} bytes exceeds maximum ${this.maxBytes} bytes`);
@@ -54,7 +54,7 @@ export class ExifService {
         sizeBytes: buffer.length,
       });
 
-      return exifData || null;
+      return exifData ?? null;
     } catch (error) {
       const duration = Date.now() - startTime;
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';

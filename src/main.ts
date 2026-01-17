@@ -15,14 +15,15 @@ const __dirname = join(__filename, '..');
 
 async function bootstrap() {
   // Create temporary app to get config (using minimal Fastify adapter)
-  const tempApp = await NestFactory.create(
-    AppModule,
-    new FastifyAdapter({ logger: false }),
-    { logger: false },
-  );
+  const tempApp = await NestFactory.create(AppModule, new FastifyAdapter({ logger: false }), {
+    logger: false,
+  });
   const configService = tempApp.get(ConfigService);
-  const imageConfig = configService.get<{ maxBytes: number }>('image')!;
-  
+  const imageConfig = configService.get<{ maxBytes: number }>('image');
+  if (!imageConfig) {
+    throw new Error('Image config not found');
+  }
+
   // Calculate body limit: maxBytes * 1.5 (to account for Base64 encoding overhead)
   const bodyLimitBytes = Math.floor(imageConfig.maxBytes * 1.5);
   await tempApp.close();
@@ -43,7 +44,11 @@ async function bootstrap() {
   app.useLogger(app.get(Logger));
 
   const logger = app.get(Logger);
-  const appConfig = configService.get<AppConfig>('app')!;
+  const appConfig = configService.get<AppConfig>('app');
+
+  if (!appConfig) {
+    throw new Error('App config not found');
+  }
 
   app.useGlobalPipes(
     new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }),

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from '@jest/globals';
-import { Test, TestingModule } from '@nestjs/testing';
+import { Test, type TestingModule } from '@nestjs/testing';
 import { ConfigModule } from '@nestjs/config';
 import { ExifService } from '../../src/modules/image-processing/services/exif.service.js';
 import imageConfig from '../../src/config/image.config.js';
@@ -39,7 +39,7 @@ describe('ExifService', () => {
       .toBuffer();
 
     const result = await service.extract(buffer, 'image/jpeg');
-    
+
     // EXIF может быть null для сгенерированного изображения
     expect(result === null || typeof result === 'object').toBe(true);
   });
@@ -57,7 +57,7 @@ describe('ExifService', () => {
       .toBuffer();
 
     const result = await service.extract(buffer, 'image/png');
-    
+
     // Some formats like PNG might return basic info, but it shouldn't have specific EXIF tags like Make or Model
     if (result) {
       expect(result).not.toHaveProperty('Make');
@@ -67,20 +67,15 @@ describe('ExifService', () => {
 
   it('should throw error for oversized image', async () => {
     const largeBuffer = Buffer.allocUnsafe(30 * 1024 * 1024); // 30MB
-    
-    await expect(
-      service.extract(largeBuffer, 'image/jpeg'),
-    ).rejects.toThrow('exceeds maximum');
+
+    await expect(service.extract(largeBuffer, 'image/jpeg')).rejects.toThrow('exceeds maximum');
   });
 
   it('should throw error for invalid MIME type', async () => {
     const buffer = Buffer.from('test');
-    
-    await expect(
-      service.extract(buffer, 'text/plain'),
-    ).rejects.toThrow('Invalid MIME type');
-  });
 
+    await expect(service.extract(buffer, 'text/plain')).rejects.toThrow('Invalid MIME type');
+  });
 
   it('should handle corrupt buffer gracefully during extraction', async () => {
     const corruptBuffer = Buffer.from('not an image');

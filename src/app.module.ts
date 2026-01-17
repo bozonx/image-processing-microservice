@@ -33,4 +33,3 @@ import { getLoggerConfig } from './common/logger/logger.factory.js';
   ],
 })
 export class AppModule {}
-

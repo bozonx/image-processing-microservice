@@ -10,4 +10,3 @@ import { QueueService } from './services/queue.service.js';
   exports: [QueueService],
 })
 export class ImageProcessingModule {}
-

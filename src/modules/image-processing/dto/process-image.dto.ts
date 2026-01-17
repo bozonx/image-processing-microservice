@@ -1,4 +1,13 @@
-import { IsString, IsOptional, IsNumber, IsBoolean, IsEnum, ValidateNested, Min, Max } from 'class-validator';
+import {
+  IsString,
+  IsOptional,
+  IsNumber,
+  IsBoolean,
+  IsEnum,
+  ValidateNested,
+  Min,
+  Max,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 
 export enum ImageFormat {
@@ -15,169 +24,169 @@ export class ResizeDto {
   @IsNumber()
   @Min(1)
   @Max(8192)
-  maxDimension?: number;
+  public maxDimension?: number;
 
   @IsOptional()
   @IsNumber()
   @Min(1)
   @Max(8192)
-  width?: number;
+  public width?: number;
 
   @IsOptional()
   @IsNumber()
   @Min(1)
   @Max(8192)
-  height?: number;
+  public height?: number;
 
   @IsOptional()
   @IsEnum(['cover', 'contain', 'fill', 'inside', 'outside'])
-  fit?: 'cover' | 'contain' | 'fill' | 'inside' | 'outside';
+  public fit?: 'cover' | 'contain' | 'fill' | 'inside' | 'outside';
 
   @IsOptional()
   @IsBoolean()
-  withoutEnlargement?: boolean;
+  public withoutEnlargement?: boolean;
 
   @IsOptional()
   @IsString()
-  position?: string;
+  public position?: string;
 }
 
 export class ExtractDto {
   @IsNumber()
   @Min(0)
-  left!: number;
+  public left!: number;
 
   @IsNumber()
   @Min(0)
-  top!: number;
+  public top!: number;
 
   @IsNumber()
   @Min(1)
-  width!: number;
+  public width!: number;
 
   @IsNumber()
   @Min(1)
-  height!: number;
+  public height!: number;
 }
 
 export class TransformDto {
   @IsOptional()
   @ValidateNested()
   @Type(() => ResizeDto)
-  resize?: ResizeDto;
+  public resize?: ResizeDto;
 
   @IsOptional()
   @ValidateNested()
   @Type(() => ExtractDto)
-  crop?: ExtractDto;
+  public crop?: ExtractDto;
 
   @IsOptional()
   @IsBoolean()
-  autoOrient?: boolean;
+  public autoOrient?: boolean;
 
   @IsOptional()
   @IsNumber()
   @Min(-360)
   @Max(360)
-  rotate?: number;
+  public rotate?: number;
 
   @IsOptional()
   @IsBoolean()
-  flip?: boolean;
+  public flip?: boolean;
 
   @IsOptional()
   @IsBoolean()
-  flop?: boolean;
+  public flop?: boolean;
 
   @IsOptional()
   @IsString()
-  backgroundColor?: string;
+  public backgroundColor?: string;
 }
 
 export class OutputDto {
   @IsOptional()
   @IsEnum(ImageFormat)
-  format?: ImageFormat;
+  public format?: ImageFormat;
 
   @IsOptional()
   @IsNumber()
   @Min(1)
   @Max(100)
-  quality?: number;
+  public quality?: number;
 
   @IsOptional()
   @IsBoolean()
-  lossless?: boolean;
+  public lossless?: boolean;
 
   @IsOptional()
   @IsBoolean()
-  stripMetadata?: boolean;
+  public stripMetadata?: boolean;
 
   @IsOptional()
   @IsNumber()
   @Min(0)
   @Max(9)
-  effort?: number;
+  public effort?: number;
 
   @IsOptional()
   @IsBoolean()
-  progressive?: boolean;
+  public progressive?: boolean;
 
   @IsOptional()
   @IsBoolean()
-  mozjpeg?: boolean;
+  public mozjpeg?: boolean;
 
   @IsOptional()
   @IsNumber()
   @Min(0)
   @Max(9)
-  compressionLevel?: number;
+  public compressionLevel?: number;
 
   @IsOptional()
   @IsString()
-  chromaSubsampling?: string;
+  public chromaSubsampling?: string;
 
   @IsOptional()
   @IsBoolean()
-  palette?: boolean;
+  public palette?: boolean;
 
   @IsOptional()
   @IsNumber()
   @Min(2)
   @Max(256)
-  colors?: number;
+  public colors?: number;
 
   @IsOptional()
   @IsNumber()
   @Min(0)
   @Max(1)
-  dither?: number;
+  public dither?: number;
 
   @IsOptional()
   @IsBoolean()
-  adaptiveFiltering?: boolean;
+  public adaptiveFiltering?: boolean;
 }
 
 export class ProcessImageDto {
   @IsString()
-  image!: string; // base64
+  public image!: string; // base64
 
   @IsString()
-  mimeType!: string;
+  public mimeType!: string;
 
   @IsOptional()
   @IsNumber()
   @Min(0)
   @Max(2)
-  priority?: number;
+  public priority?: number;
 
   @IsOptional()
   @ValidateNested()
   @Type(() => TransformDto)
-  transform?: TransformDto;
+  public transform?: TransformDto;
 
   @IsOptional()
   @ValidateNested()
   @Type(() => OutputDto)
-  output?: OutputDto;
+  public output?: OutputDto;
 }

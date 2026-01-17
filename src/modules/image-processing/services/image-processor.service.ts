@@ -30,12 +30,12 @@ export class ImageProcessorService {
 
   /**
    * Processes an image based on the provided DTO.
-   * 
+   *
    * @param dto - Data Transfer Object containing base64 image, mimeType, and desired transformations/output settings.
    * @returns An object containing the processed buffer, dimensions, mimeType, and optimization stats.
    * @throws BadRequestException if the image is invalid or exceeds the size limit.
    */
-  async process(dto: ProcessImageDto): Promise<ProcessResult> {
+  public async process(dto: ProcessImageDto): Promise<ProcessResult> {
     const inputBuffer = this.validateImage(dto.image, dto.mimeType);
     const startTime = Date.now();
     const beforeBytes = inputBuffer.length;
@@ -52,8 +52,8 @@ export class ImageProcessorService {
       const duration = Date.now() - startTime;
 
       // Ensure we have correct format name for response
-      const outputFormat = dto.output?.format || this.defaults.format || resultBuffer.info.format;
-      
+      const outputFormat = dto.output?.format ?? this.defaults.format ?? resultBuffer.info.format;
+
       const stats = {
         beforeBytes,
         afterBytes,
@@ -98,7 +98,7 @@ export class ImageProcessorService {
 
   /**
    * Validates the input image base64 and MIME type.
-   * 
+   *
    * @param base64Image - The image data in base64 format.
    * @param mimeType - The MIME type of the input image.
    * @returns The decoded Buffer of the image.
@@ -132,7 +132,7 @@ export class ImageProcessorService {
 
   /**
    * Applies requested transformations (resize, crop, rotate, etc.) to the sharp pipeline.
-   * 
+   *
    * @param pipeline - The current sharp instance.
    * @param transform - The transformation parameters.
    */
@@ -166,12 +166,12 @@ export class ImageProcessorService {
 
       if (resize.maxDimension) {
         pipeline = pipeline.resize(resize.maxDimension, resize.maxDimension, {
-          fit: resize.fit || 'inside',
+          fit: resize.fit ?? 'inside',
           withoutEnlargement: resize.withoutEnlargement ?? true,
         });
       } else if (resize.width || resize.height) {
         pipeline = pipeline.resize(resize.width, resize.height, {
-          fit: resize.fit || 'inside',
+          fit: resize.fit ?? 'inside',
           withoutEnlargement: resize.withoutEnlargement ?? true,
           position: resize.position as any,
         });
@@ -197,12 +197,12 @@ export class ImageProcessorService {
 
   /**
    * Applies output format and format-specific optimization settings.
-   * 
+   *
    * @param pipeline - The current sharp instance.
    * @param output - Output format and optimization parameters.
    */
   private applyOutputFormat(pipeline: sharp.Sharp, output?: OutputDto): sharp.Sharp {
-    const format = output?.format || this.defaults.format;
+    const format = output?.format ?? this.defaults.format;
     const quality = output?.quality ?? this.defaults.quality;
     const stripMetadata = output?.stripMetadata ?? this.defaults.stripMetadata;
 
@@ -238,7 +238,7 @@ export class ImageProcessorService {
       case 'png':
         return pipeline.png({
           compressionLevel: output?.compressionLevel ?? config.pngCompressionLevel,
-          palette: output?.palette ?? (output?.quality !== undefined),
+          palette: output?.palette ?? output?.quality !== undefined,
           quality: output?.quality,
           effort: output?.effort ?? this.defaults.effort,
           colors: output?.colors,

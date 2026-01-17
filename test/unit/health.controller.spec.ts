@@ -8,8 +8,6 @@ describe('HealthController (unit)', () => {
   let moduleRef: TestingModule;
 
   beforeAll(async () => {
-
-
     moduleRef = await Test.createTestingModule({
       controllers: [HealthController],
       providers: [

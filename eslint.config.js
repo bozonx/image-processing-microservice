@@ -45,6 +45,11 @@ export default [
                 Set: 'readonly',
                 Proxy: 'readonly',
                 Reflect: 'readonly',
+                setTimeout: 'readonly',
+                setInterval: 'readonly',
+                clearTimeout: 'readonly',
+                clearInterval: 'readonly',
+                NodeJS: 'readonly',
             },
         },
         plugins: {
@@ -57,6 +62,7 @@ export default [
             'prettier/prettier': 'error',
 
             // TypeScript specific rules
+            'no-unused-vars': 'off',
             '@typescript-eslint/explicit-function-return-type': 'off',
             '@typescript-eslint/explicit-module-boundary-types': 'off',
             '@typescript-eslint/no-explicit-any': 'warn',

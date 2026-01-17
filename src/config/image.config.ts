@@ -96,14 +96,14 @@ export class ImageConfig {
 
 export default registerAs('image', (): ImageConfig => {
   const config = plainToClass(ImageConfig, {
-    maxBytes: parseInt(process.env.FILE_MAX_BYTES_MB || '25', 10) * 1024 * 1024,
+    maxBytes: parseInt(process.env.FILE_MAX_BYTES_MB ?? '25', 10) * 1024 * 1024,
     queue: {
-      maxConcurrency: parseInt(process.env.HEAVY_TASKS_MAX_CONCURRENCY || '4', 10),
-      timeout: parseInt(process.env.HEAVY_TASKS_QUEUE_TIMEOUT_MS || '30000', 10),
-      requestTimeout: parseInt(process.env.HEAVY_TASKS_REQUEST_TIMEOUT_MS || '60000', 10),
+      maxConcurrency: parseInt(process.env.HEAVY_TASKS_MAX_CONCURRENCY ?? '4', 10),
+      timeout: parseInt(process.env.HEAVY_TASKS_QUEUE_TIMEOUT_MS ?? '30000', 10),
+      requestTimeout: parseInt(process.env.HEAVY_TASKS_REQUEST_TIMEOUT_MS ?? '60000', 10),
     },
     defaults: {
-      format: process.env.IMAGE_DEFAULT_FORMAT || DefaultImageFormat.WEBP,
+      format: process.env.IMAGE_DEFAULT_FORMAT ?? DefaultImageFormat.WEBP,
       maxDimension: 3840,
       quality: 80,
       effort: 6,
@@ -123,7 +123,7 @@ export default registerAs('image', (): ImageConfig => {
   });
 
   if (errors.length > 0) {
-    const errorMessages = errors.map((err) => Object.values(err.constraints ?? {}).join(', '));
+    const errorMessages = errors.map(err => Object.values(err.constraints ?? {}).join(', '));
     throw new Error(`Image config validation error: ${errorMessages.join('; ')}`);
   }
 

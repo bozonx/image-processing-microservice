@@ -7,4 +7,3 @@ import { ImageProcessingModule } from '../image-processing/image-processing.modu
   controllers: [HealthController],
 })
 export class HealthModule {}
-

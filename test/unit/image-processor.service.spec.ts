@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from '@jest/globals';
-import { Test, TestingModule } from '@nestjs/testing';
+import { Test, type TestingModule } from '@nestjs/testing';
 import { ConfigModule } from '@nestjs/config';
 import { BadRequestException } from '@nestjs/common';
 import { ImageProcessorService } from '../../src/modules/image-processing/services/image-processor.service.js';
@@ -209,7 +209,7 @@ describe('ImageProcessorService', () => {
 
   it('should throw error for oversized image', async () => {
     const largeBuffer = Buffer.allocUnsafe(30 * 1024 * 1024); // 30MB
-    
+
     await expect(
       service.process({
         image: largeBuffer.toString('base64'),
@@ -300,7 +300,7 @@ describe('ImageProcessorService', () => {
   it('should fail for corrupt image data', async () => {
     // Valid base64, but invalid content
     const corruptBuffer = Buffer.from('not an image');
-    
+
     await expect(
       service.process({
         image: corruptBuffer.toString('base64'),
@@ -315,6 +315,6 @@ describe('ImageProcessorService', () => {
         image: '',
         mimeType: 'image/jpeg',
       }),
-    ).rejects.toThrow(); 
+    ).rejects.toThrow();
   });
 });

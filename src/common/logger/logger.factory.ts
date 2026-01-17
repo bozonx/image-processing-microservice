@@ -1,10 +1,13 @@
-import { ConfigService } from '@nestjs/config';
-import { Params } from 'nestjs-pino';
-import { AppConfig } from '../../config/app.config.js';
+import type { ConfigService } from '@nestjs/config';
+import type { Params } from 'nestjs-pino';
+import type { AppConfig } from '../../config/app.config.js';
 import pkg from '../../../package.json' with { type: 'json' };
 
 export const getLoggerConfig = (configService: ConfigService): Params => {
-  const appConfig = configService.get<AppConfig>('app')!;
+  const appConfig = configService.get<AppConfig>('app');
+  if (!appConfig) {
+    throw new Error('App config not found');
+  }
   const isDev = appConfig.nodeEnv === 'development';
 
   return {
@@ -12,7 +15,7 @@ export const getLoggerConfig = (configService: ConfigService): Params => {
       level: appConfig.logLevel,
       timestamp: () => `,"@timestamp":"${new Date().toISOString()}"`,
       base: {
-        service: (pkg as any).name ?? 'app',
+        service: pkg.name || 'app',
         environment: appConfig.nodeEnv,
       },
       transport: isDev
@@ -28,7 +31,7 @@ export const getLoggerConfig = (configService: ConfigService): Params => {
           }
         : undefined,
       serializers: {
-        req: (req) => ({
+        req: req => ({
           id: req.id,
           method: req.method,
           url: req.url,
@@ -36,10 +39,10 @@ export const getLoggerConfig = (configService: ConfigService): Params => {
           remoteAddress: req.ip,
           remotePort: req.socket?.remotePort,
         }),
-        res: (res) => ({
+        res: res => ({
           statusCode: res.statusCode,
         }),
-        err: (err) => ({
+        err: err => ({
           type: err.type,
           message: err.message,
           stack: err.stack,
@@ -62,7 +65,7 @@ export const getLoggerConfig = (configService: ConfigService): Params => {
         return 'info';
       },
       autoLogging: {
-        ignore: (req) => {
+        ignore: req => {
           if (appConfig.nodeEnv === 'production') {
             return req.url?.includes('/health') ?? false;
           }

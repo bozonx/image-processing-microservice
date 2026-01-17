@@ -1,4 +1,10 @@
-import { Injectable, OnModuleDestroy, Logger, ServiceUnavailableException, RequestTimeoutException } from '@nestjs/common';
+import {
+  Injectable,
+  OnModuleDestroy,
+  Logger,
+  ServiceUnavailableException,
+  RequestTimeoutException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import PQueue from 'p-queue';
 import type { ImageConfig } from '../../../config/image.config.js';
@@ -17,7 +23,7 @@ export class QueueService implements OnModuleDestroy {
   constructor(private readonly configService: ConfigService) {
     const config = this.configService.get<ImageConfig>('image')!;
     const { maxConcurrency, timeout, requestTimeout } = config.queue;
-    
+
     this.requestTimeout = requestTimeout;
 
     this.queue = new PQueue({
@@ -32,17 +38,14 @@ export class QueueService implements OnModuleDestroy {
 
   /**
    * Adds a task to the queue with a specified priority.
-   * 
+   *
    * @param task - An async function representing the task to execute.
    * @param priority - Task priority (higher number = higher priority).
    * @returns The result of the task execution.
    * @throws ServiceUnavailableException if the service is shutting down.
    * @throws RequestTimeoutException if the task (including wait time) exceeds requestTimeout.
    */
-  async add<T>(
-    task: () => Promise<T>,
-    priority: number = 2,
-  ): Promise<T> {
+  public async add<T>(task: () => Promise<T>, priority: number = 2): Promise<T> {
     if (this.isShuttingDown) {
       throw new ServiceUnavailableException('Service is shutting down, rejecting new tasks');
     }
@@ -91,7 +94,7 @@ export class QueueService implements OnModuleDestroy {
   /**
    * Returns current queue metrics (size and number of active tasks).
    */
-  getStatus() {
+  public getStatus() {
     return {
       size: this.queue.size,
       pending: this.queue.pending,
@@ -101,7 +104,7 @@ export class QueueService implements OnModuleDestroy {
   /**
    * Lifecycle hook to ensure all remaining tasks complete during application shutdown.
    */
-  async onModuleDestroy() {
+  public async onModuleDestroy() {
     this.logger.log('Starting graceful shutdown...');
     this.isShuttingDown = true;
 

@@ -1,5 +1,5 @@
 import { jest, describe, it, expect, beforeEach } from '@jest/globals';
-import { Test, TestingModule } from '@nestjs/testing';
+import { Test, type TestingModule } from '@nestjs/testing';
 import { ImageProcessingController } from '../../src/modules/image-processing/image-processing.controller.js';
 import { ImageProcessorService } from '../../src/modules/image-processing/services/image-processor.service.js';
 import { ExifService } from '../../src/modules/image-processing/services/exif.service.js';
