@@ -1,4 +1,4 @@
-import { Injectable, OnModuleDestroy, Logger } from '@nestjs/common';
+import { Injectable, OnModuleDestroy, Logger, ServiceUnavailableException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import PQueue from 'p-queue';
 
@@ -29,7 +29,7 @@ export class QueueService implements OnModuleDestroy {
     priority: number = 2,
   ): Promise<T> {
     if (this.isShuttingDown) {
-      throw new Error('Service is shutting down, rejecting new tasks');
+      throw new ServiceUnavailableException('Service is shutting down, rejecting new tasks');
     }
 
     const startTime = Date.now();
