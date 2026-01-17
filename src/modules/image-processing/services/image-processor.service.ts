@@ -2,25 +2,40 @@ import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import sharp from 'sharp';
 import { ProcessImageDto, TransformDto, OutputDto } from '../dto/process-image.dto.js';
+import type { ImageDefaults, ImageConfig } from '../../../config/image.config.js';
 
+interface ProcessResult {
+  buffer: Buffer;
+  size: number;
+  mimeType: string;
+  dimensions: { width: number; height: number };
+  stats?: { beforeBytes: number; afterBytes: number; reductionPercent: number };
+}
+
+/**
+ * Service responsible for image processing using the sharp library.
+ * Handles resizing, cropping, format conversion, and other transformations.
+ */
 @Injectable()
 export class ImageProcessorService {
   private readonly logger = new Logger(ImageProcessorService.name);
   private readonly maxBytes: number;
-  private readonly defaults: any;
+  private readonly defaults: ImageDefaults;
 
   constructor(private readonly configService: ConfigService) {
-    this.maxBytes = this.configService.get<number>('image.maxBytes', 25 * 1024 * 1024);
-    this.defaults = this.configService.get('image.defaults', {});
+    const config = this.configService.get<ImageConfig>('image')!;
+    this.maxBytes = config.maxBytes;
+    this.defaults = config.defaults;
   }
 
-  async process(dto: ProcessImageDto): Promise<{
-    buffer: Buffer;
-    size: number;
-    mimeType: string;
-    dimensions: { width: number; height: number };
-    stats?: { beforeBytes: number; afterBytes: number; reductionPercent: number };
-  }> {
+  /**
+   * Processes an image based on the provided DTO.
+   * 
+   * @param dto - Data Transfer Object containing base64 image, mimeType, and desired transformations/output settings.
+   * @returns An object containing the processed buffer, dimensions, mimeType, and optimization stats.
+   * @throws BadRequestException if the image is invalid or exceeds the size limit.
+   */
+  async process(dto: ProcessImageDto): Promise<ProcessResult> {
     const inputBuffer = this.validateImage(dto.image, dto.mimeType);
     const startTime = Date.now();
     const beforeBytes = inputBuffer.length;
@@ -36,7 +51,7 @@ export class ImageProcessorService {
       const afterBytes = resultBuffer.data.length;
       const duration = Date.now() - startTime;
 
-      // Ensure we have correct format name for response (e.g. 'jpeg' instead of undefined)
+      // Ensure we have correct format name for response
       const outputFormat = dto.output?.format || this.defaults.format || resultBuffer.info.format;
       
       const stats = {
@@ -81,6 +96,14 @@ export class ImageProcessorService {
     }
   }
 
+  /**
+   * Validates the input image base64 and MIME type.
+   * 
+   * @param base64Image - The image data in base64 format.
+   * @param mimeType - The MIME type of the input image.
+   * @returns The decoded Buffer of the image.
+   * @throws BadRequestException if validation fails.
+   */
   private validateImage(base64Image: string, mimeType: string): Buffer {
     if (!mimeType.startsWith('image/')) {
       throw new BadRequestException(`Invalid MIME type: ${mimeType}`);
@@ -96,6 +119,9 @@ export class ImageProcessorService {
     return buffer;
   }
 
+  /**
+   * Returns specific sharp options based on MIME type (e.g., enabling animation for GIFs).
+   */
   private getSharpOptions(mimeType: string): sharp.SharpOptions {
     const options: sharp.SharpOptions = {};
     if (mimeType === 'image/gif') {
@@ -104,40 +130,36 @@ export class ImageProcessorService {
     return options;
   }
 
+  /**
+   * Applies requested transformations (resize, crop, rotate, etc.) to the sharp pipeline.
+   * 
+   * @param pipeline - The current sharp instance.
+   * @param transform - The transformation parameters.
+   */
   private applyTransformations(pipeline: sharp.Sharp, transform?: TransformDto): sharp.Sharp {
     if (!transform) {
-      // Apply defaults if no transform provided?
-      // Logic in previous code: const autoOrient = dto.transform?.autoOrient ?? this.defaults.autoOrient;
-      // This implies checking defaults even if transform is undefined, but only if we process "autoOrient".
-      // But typically "autoOrient" default is true. 
-      // So we should probably check it.
-      // However, if transform is undefined, existing logic effectively does:
-      // autoOrient = undefined ?? default.
-      // So yes, we need to handle default autoOrient even if transform is undefined.
-      
-      const defaultAutoOrient = this.defaults.autoOrient;
-      if (defaultAutoOrient) {
+      // Apply default auto-orient if no transform provided
+      if (this.defaults.autoOrient) {
         return pipeline.rotate();
       }
       return pipeline;
     }
 
-    // Auto-orient
+    // Auto-orient: handles rotation and mirroring based on EXIF tag
     const autoOrient = transform.autoOrient ?? this.defaults.autoOrient;
     if (autoOrient) {
       pipeline = pipeline.rotate();
     }
 
-    // Crop
+    // Crop: precise region extraction
     if (transform.crop) {
       pipeline = pipeline.extract(transform.crop);
     }
 
-    // Resize
+    // Resize: handles dimensions, fit modes, and enlargement constraints
     if (transform.resize) {
       const { resize } = transform;
 
-      // Validation
       if (resize.maxDimension && (resize.width || resize.height)) {
         throw new BadRequestException('Cannot use maxDimension together with width/height');
       }
@@ -160,12 +182,12 @@ export class ImageProcessorService {
     if (transform.flip) pipeline = pipeline.flip();
     if (transform.flop) pipeline = pipeline.flop();
 
-    // Custom Rotate
+    // Manual rotation (after auto-orient)
     if (transform.rotate !== undefined) {
       pipeline = pipeline.rotate(transform.rotate);
     }
 
-    // Background color
+    // Background color (e.g., for flattening transparent images)
     if (transform.backgroundColor) {
       pipeline = pipeline.flatten({ background: transform.backgroundColor });
     }
@@ -173,14 +195,24 @@ export class ImageProcessorService {
     return pipeline;
   }
 
+  /**
+   * Applies output format and format-specific optimization settings.
+   * 
+   * @param pipeline - The current sharp instance.
+   * @param output - Output format and optimization parameters.
+   */
   private applyOutputFormat(pipeline: sharp.Sharp, output?: OutputDto): sharp.Sharp {
     const format = output?.format || this.defaults.format;
     const quality = output?.quality ?? this.defaults.quality;
     const stripMetadata = output?.stripMetadata ?? this.defaults.stripMetadata;
 
+    // By default, sharp strips most metadata unless .withMetadata() is called.
+    // If we DON'T want to strip, we preserve it, but clear orientation to avoid double-rotation.
     if (!stripMetadata) {
       pipeline = pipeline.withMetadata({ orientation: undefined });
     }
+
+    const config = this.configService.get<ImageConfig>('image')!;
 
     switch (format) {
       case 'webp':
@@ -194,18 +226,18 @@ export class ImageProcessorService {
           quality,
           lossless: output?.lossless ?? this.defaults.lossless,
           effort: output?.effort ?? this.defaults.effort,
-          chromaSubsampling: output?.chromaSubsampling ?? this.configService.get('image.avif.chromaSubsampling', '4:2:0'),
+          chromaSubsampling: output?.chromaSubsampling ?? config.avifChromaSubsampling,
         });
       case 'jpeg':
         return pipeline.jpeg({
           quality,
-          progressive: output?.progressive ?? this.configService.get('image.jpeg.progressive', false),
-          mozjpeg: output?.mozjpeg ?? this.configService.get('image.jpeg.mozjpeg', false),
-          chromaSubsampling: output?.chromaSubsampling ?? this.configService.get('image.jpeg.chromaSubsampling', '4:2:0'),
+          progressive: output?.progressive ?? config.jpegProgressive,
+          mozjpeg: output?.mozjpeg ?? config.jpegMozjpeg,
+          chromaSubsampling: output?.chromaSubsampling ?? config.jpegChromaSubsampling,
         });
       case 'png':
         return pipeline.png({
-          compressionLevel: output?.compressionLevel ?? this.configService.get('image.png.compressionLevel', 6),
+          compressionLevel: output?.compressionLevel ?? config.pngCompressionLevel,
           palette: output?.palette ?? (output?.quality !== undefined),
           quality: output?.quality,
           effort: output?.effort ?? this.defaults.effort,

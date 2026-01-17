@@ -1,16 +1,29 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import exifr from 'exifr';
+import type { ImageConfig } from '../../../config/image.config.js';
 
+/**
+ * Service for extracting EXIF metadata from images using the exifr library.
+ */
 @Injectable()
 export class ExifService {
   private readonly logger = new Logger(ExifService.name);
   private readonly maxBytes: number;
 
   constructor(private readonly configService: ConfigService) {
-    this.maxBytes = this.configService.get<number>('image.maxBytes', 25 * 1024 * 1024);
+    const config = this.configService.get<ImageConfig>('image')!;
+    this.maxBytes = config.maxBytes;
   }
 
+  /**
+   * Extracts EXIF metadata from an image buffer.
+   * 
+   * @param buffer - The image data as a Buffer.
+   * @param mimeType - The MIME type of the image.
+   * @returns A record of EXIF data or null if extraction fails or no data is found.
+   * @throws Error if the image size exceeds the limit.
+   */
   async extract(buffer: Buffer, mimeType: string): Promise<Record<string, any> | null> {
     // Check size
     if (buffer.length > this.maxBytes) {
@@ -25,6 +38,7 @@ export class ExifService {
     const startTime = Date.now();
 
     try {
+      // parse() returns data or undefined if nothing found
       const exifData = await exifr.parse(buffer, {
         translateKeys: true,
         translateValues: false,

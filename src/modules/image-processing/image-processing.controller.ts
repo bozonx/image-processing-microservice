@@ -5,6 +5,10 @@ import { QueueService } from './services/queue.service.js';
 import { ProcessImageDto } from './dto/process-image.dto.js';
 import { ExtractExifDto } from './dto/exif.dto.js';
 
+/**
+ * Controller for handling image processing and EXIF extraction requests.
+ * All operations are offloaded to a priority queue to ensure system stability.
+ */
 @Controller()
 export class ImageProcessingController {
   constructor(
@@ -13,6 +17,13 @@ export class ImageProcessingController {
     private readonly queueService: QueueService,
   ) {}
 
+  /**
+   * Processes an image (resize, crop, convert) according to the specified parameters.
+   * Tasks are added to the priority queue.
+   * 
+   * @param dto - Formatting and transformation options.
+   * @returns Processed image data in base64 format and metadata.
+   */
   @Post('process')
   @HttpCode(HttpStatus.OK)
   async process(@Body() dto: ProcessImageDto) {
@@ -32,6 +43,13 @@ export class ImageProcessingController {
     return result;
   }
 
+  /**
+   * Extracts EXIF metadata from the provided image.
+   * Tasks are added to the priority queue.
+   * 
+   * @param dto - Image data and MIME type.
+   * @returns EXIF data record.
+   */
   @Post('exif')
   @HttpCode(HttpStatus.OK)
   async extractExif(@Body() dto: ExtractExifDto) {
