@@ -52,4 +52,37 @@ describe('QueueService', () => {
     
     await expect(service.add(task)).rejects.toThrow('Task failed');
   });
+
+  it('should timeout if request takes too long', async () => {
+    // Override requestTimeout for this test
+    (service as any).requestTimeout = 100;
+    
+    // Create a slow task
+    const slowTask = () => new Promise<string>((resolve) => setTimeout(() => resolve('done'), 200));
+    
+    await expect(service.add(slowTask)).rejects.toThrow('Request timeout');
+  });
+
+  it('should prioritize higher priority tasks', async () => {
+    // Reduce concurrency to 1 to force queuing
+    (service as any).queue = new (await import('p-queue')).default({ concurrency: 1 });
+    
+    const results: string[] = [];
+    
+    // Start a blocking task
+    const blocker = new Promise<void>((resolve) => setTimeout(resolve, 50));
+    service.add(() => blocker.then(() => results.push('blocker')));
+    
+    // Add low priority task
+    service.add(async () => { results.push('low'); return 'low'; }, 0);
+    
+    // Add high priority task
+    service.add(async () => { results.push('high'); return 'high'; }, 10);
+    
+    // Wait for everything
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    
+    // Expect: blocker finishes, then high priority, then low priority
+    expect(results).toEqual(['blocker', 'high', 'low']);
+  });
 });

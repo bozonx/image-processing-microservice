@@ -6,6 +6,7 @@ export default registerAs('image', () => ({
   queue: {
     maxConcurrency: parseInt(process.env.HEAVY_TASKS_MAX_CONCURRENCY || '4', 10),
     timeout: parseInt(process.env.HEAVY_TASKS_QUEUE_TIMEOUT_MS || '30000', 10),
+    requestTimeout: parseInt(process.env.HEAVY_TASKS_REQUEST_TIMEOUT_MS || '60000', 10),
   },
 
   defaults: {

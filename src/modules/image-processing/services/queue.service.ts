@@ -6,18 +6,22 @@ import PQueue from 'p-queue';
 export class QueueService implements OnModuleDestroy {
   private readonly logger = new Logger(QueueService.name);
   private readonly queue: PQueue;
+  private readonly requestTimeout: number;
   private isShuttingDown = false;
 
   constructor(private readonly configService: ConfigService) {
     const concurrency = this.configService.get<number>('image.queue.maxConcurrency', 4);
     const timeout = this.configService.get<number>('image.queue.timeout', 30000);
+    this.requestTimeout = this.configService.get<number>('image.queue.requestTimeout', 60000);
 
     this.queue = new PQueue({
       concurrency,
       timeout,
     });
 
-    this.logger.log(`Queue initialized with concurrency: ${concurrency}, timeout: ${timeout}ms`);
+    this.logger.log(
+      `Queue initialized with concurrency: ${concurrency}, job timeout: ${timeout}ms, request timeout: ${this.requestTimeout}ms`,
+    );
   }
 
   async add<T>(
@@ -31,7 +35,17 @@ export class QueueService implements OnModuleDestroy {
     const startTime = Date.now();
 
     try {
-      const result = await this.queue.add(task, { priority });
+      const taskPromise = this.queue.add(task, { priority });
+
+      // Create a timeout promise
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        setTimeout(() => {
+          reject(new Error('Request timeout'));
+        }, this.requestTimeout);
+      });
+
+      // Race between task execution (including wait time) and timeout
+      const result = await Promise.race([taskPromise, timeoutPromise]);
       const duration = Date.now() - startTime;
 
       this.logger.debug({
@@ -41,7 +55,7 @@ export class QueueService implements OnModuleDestroy {
         pending: this.queue.pending,
       });
 
-      return result;
+      return result as T;
     } catch (error) {
       const duration = Date.now() - startTime;
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
