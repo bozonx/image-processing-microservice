@@ -51,9 +51,17 @@ describe('ImageProcessingController', () => {
     fields,
   });
 
-  const mockReq = (fileData: any, headers: Record<string, string> = { 'content-type': 'multipart/form-data' }) => ({
+  const mockReq = (partsData: any[] = [], headers: Record<string, string> = { 'content-type': 'multipart/form-data' }) => ({
     headers,
-    file: jest.fn<() => Promise<any>>().mockResolvedValue(fileData),
+    file: jest.fn().mockImplementation(async () => partsData[0]),
+    files: jest.fn().mockImplementation(() => {
+      async function* gen() {
+        for (const part of partsData) {
+          yield part;
+        }
+      }
+      return gen();
+    }),
   });
 
   const mockRes = () => {
@@ -85,11 +93,14 @@ describe('ImageProcessingController', () => {
 
   describe('process', () => {
     it('should call imageProcessor.processStream and return stream', async () => {
-      const file = {
-        ...mockFile(),
+      const filePart = {
+        type: 'file',
+        fieldname: 'file',
+        mimetype: 'image/jpeg',
         file: Readable.from([Buffer.from('test-data')]),
       };
-      const req = mockReq(file);
+      
+      const req = mockReq([filePart]);
       const res = mockRes();
       const processedResult = {
         stream: 'processed-stream',
@@ -104,7 +115,8 @@ describe('ImageProcessingController', () => {
       expect(queueService.add).toHaveBeenCalled();
       expect(imageProcessor.processStream).toHaveBeenCalledWith(
         expect.any(Readable),
-        file.mimetype,
+        filePart.mimetype,
+        undefined,
         undefined,
         undefined,
       );
@@ -112,19 +124,90 @@ describe('ImageProcessingController', () => {
       expect(res.send).toHaveBeenCalledWith('processed-stream');
     });
 
+    it('should handle watermark and params', async () => {
+      const filePart = {
+        type: 'file',
+        fieldname: 'file',
+        mimetype: 'image/jpeg',
+        file: Readable.from([Buffer.from('main-image')]),
+      };
+      const watermarkPart = {
+        type: 'file',
+        fieldname: 'watermark',
+        mimetype: 'image/png',
+        file: Readable.from([Buffer.from('watermark-image')]),
+      };
+      const paramsPart = {
+        type: 'field',
+        fieldname: 'params',
+        toBuffer: async () => Buffer.from(JSON.stringify({
+          transform: {
+            watermark: { mode: 'single' }
+          }
+        })),
+      };
+
+      const req = mockReq([filePart, watermarkPart, paramsPart]);
+      const res = mockRes();
+      const processedResult = {
+        stream: 'processed-stream',
+        mimeType: 'image/webp',
+        extension: 'webp',
+      };
+
+      jest.spyOn(imageProcessor, 'processStream').mockResolvedValue(processedResult as any);
+
+      await controller.process(req as any, res as any);
+
+      expect(imageProcessor.processStream).toHaveBeenCalledWith(
+        expect.any(Readable),
+        'image/jpeg',
+        expect.objectContaining({ watermark: { mode: 'single' } }),
+        undefined,
+        expect.objectContaining({
+          buffer: Buffer.from('watermark-image'),
+          mimetype: 'image/png',
+        }),
+      );
+    });
+
     it('should throw BadRequestException if no file', async () => {
-      const req = mockReq(null);
+      const req = mockReq([]);
       await expect(controller.process(req as any, {} as any)).rejects.toThrow(BadRequestException);
+    });
+
+    it('should throw BadRequestException if watermark config provided but no file', async () => {
+      const filePart = {
+        type: 'file',
+        fieldname: 'file',
+        mimetype: 'image/jpeg',
+        file: Readable.from([Buffer.from('main-image')]),
+      };
+      const paramsPart = {
+        type: 'field',
+        fieldname: 'params',
+        toBuffer: async () => Buffer.from(JSON.stringify({
+          transform: {
+            watermark: { mode: 'single' }
+          }
+        })),
+      };
+
+      const req = mockReq([filePart, paramsPart]);
+      await expect(controller.process(req as any, {} as any)).rejects.toThrow(
+        'Watermark file is required when watermark config is provided'
+      );
     });
   });
 
   describe('extractExif', () => {
     it('should call exifService.extract and return result', async () => {
       const file = {
-        ...mockFile(),
+        mimetype: 'image/jpeg',
         file: Readable.from([Buffer.from('test-data')]),
+        fields: {},
       };
-      const req = mockReq(file);
+      const req = mockReq([file]);
       const exifData = { Make: 'Canon' };
 
       jest.spyOn(exifService, 'extract').mockResolvedValue(exifData);
