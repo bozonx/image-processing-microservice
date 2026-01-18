@@ -2,7 +2,8 @@
 node_modules/
 
 # Build artifacts
-# dist/ - needed for Docker image build
+# Build artifacts
+dist/
 *.tsbuildinfo
 coverage/
 
@@ -55,10 +56,8 @@ docker-compose*.yml
 .github/
 .gitlab-ci.yml
 
-# TypeScript configs (only keep tsconfig.build.json for production)
-tsconfig.json
+# TypeScript configs
 tsconfig.eslint.json
-nest-cli.json
 
 # Misc
 tmp/

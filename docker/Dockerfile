@@ -1,12 +1,31 @@
 ARG NODE_MAJOR=22
-FROM node:${NODE_MAJOR}-bookworm-slim
 
-# Install system dependencies for Sharp
+# --- Build Stage ---
+FROM node:${NODE_MAJOR}-bookworm-slim AS builder
+
+# Install build dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    libvips-dev \
-    python3 \
-    build-essential \
+  python3 \
+  build-essential \
   && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+RUN corepack enable
+
+COPY package.json pnpm-lock.yaml ./
+
+# Install dependencies (including devDependencies)
+RUN pnpm install --frozen-lockfile
+
+COPY . .
+
+# Build the application
+RUN pnpm run build
+
+
+# --- Production Stage ---
+FROM node:${NODE_MAJOR}-bookworm-slim AS runner
 
 WORKDIR /app
 
@@ -16,19 +35,19 @@ ENV LISTEN_PORT=3000
 ENV TZ=UTC
 ENV LOG_LEVEL=info
 
-# Install pnpm
 RUN corepack enable
 
-# Copy runtime files
 COPY package.json pnpm-lock.yaml ./
-RUN pnpm install --prod --frozen-lockfile --prefer-offline || pnpm install --prod --prefer-offline
 
-# Copy pre-built application
-COPY dist ./dist
+# Install only production dependencies
+RUN pnpm install --prod --frozen-lockfile
+
+# Copy built application from builder stage
+COPY --from=builder /app/dist ./dist
 
 # Create non-root user
 RUN groupadd -g 1001 nodejs && \
-    useradd -u 1001 -g 1001 -m -s /usr/sbin/nologin nodejs
+  useradd -u 1001 -g 1001 -m -s /usr/sbin/nologin nodejs
 
 USER nodejs
 
