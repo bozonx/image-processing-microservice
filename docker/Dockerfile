@@ -31,7 +31,7 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 ENV LISTEN_HOST=0.0.0.0
-ENV LISTEN_PORT=3000
+ENV LISTEN_PORT=8080
 ENV TZ=UTC
 ENV LOG_LEVEL=info
 
@@ -51,10 +51,10 @@ RUN groupadd -g 1001 nodejs && \
 
 USER nodejs
 
-EXPOSE 3000
+EXPOSE 8080
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-  CMD node -e "require('http').get('http://localhost:3000/api/v1/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"
+  CMD node -e "require('http').get('http://localhost:8080/api/v1/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"
 
 CMD ["node", "dist/src/main.js"]

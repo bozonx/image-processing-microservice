@@ -443,7 +443,7 @@ Health check endpoint.
 # Конфигурация Сервера
 NODE_ENV=production                    # production | development | test
 LISTEN_HOST=0.0.0.0                   # Адрес прослушивания
-LISTEN_PORT=3000                      # Порт прослушивания
+LISTEN_PORT=8080                      # Порт прослушивания
 BASE_PATH=                            # Префикс базового пути (опционально)
 LOG_LEVEL=info                        # trace|debug|info|warn|error|fatal|silent
 TZ=UTC                                # Часовой пояс

@@ -151,7 +151,7 @@ image-processing-microservice/
 # Конфигурация Сервера
 NODE_ENV=development
 LISTEN_HOST=localhost
-LISTEN_PORT=3000
+LISTEN_PORT=8080
 BASE_PATH=
 LOG_LEVEL=debug
 TZ=UTC
@@ -190,7 +190,7 @@ SHUTDOWN_TIMEOUT_SECONDS=30
 # Конфигурация Сервера
 NODE_ENV=production
 LISTEN_HOST=0.0.0.0
-LISTEN_PORT=3000
+LISTEN_PORT=8080
 BASE_PATH=
 LOG_LEVEL=info
 TZ=UTC
@@ -278,7 +278,7 @@ services:
     environment:
       - NODE_ENV=production
       - LISTEN_HOST=0.0.0.0
-      - LISTEN_PORT=3000
+      - LISTEN_PORT=8080
       - LOG_LEVEL=info
     env_file:
       - ../.env.production
