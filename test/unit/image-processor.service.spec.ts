@@ -312,4 +312,75 @@ describe('ImageProcessorService', () => {
     expect(result.dimensions.width).toBe(500);
     expect(result.dimensions.height).toBe(300);
   });
+
+  it('should remove alpha channel when requested', async () => {
+    const inputBuffer = await sharp({
+      create: {
+        width: 100,
+        height: 100,
+        channels: 4,
+        background: { r: 255, g: 0, b: 0, alpha: 0.5 },
+      },
+    })
+      .png()
+      .toBuffer();
+
+    const result = await processWrapper({
+      image: inputBuffer.toString('base64'),
+      mimeType: 'image/png',
+      transform: {
+        removeAlpha: true,
+      },
+      output: {
+        format: 'png',
+      },
+    });
+
+    const metadata = await sharp(result.buffer).metadata();
+    expect(metadata.hasAlpha).toBe(false);
+  });
+
+  it('should output raw pixel data', async () => {
+    const inputBuffer = await sharp({
+      create: {
+        width: 10,
+        height: 10,
+        channels: 3,
+        background: { r: 255, g: 0, b: 0 },
+      },
+    })
+      .jpeg()
+      .toBuffer();
+
+    const stream = bufferToStream(inputBuffer);
+    const result = await service.processStream(stream, 'image/jpeg', {}, { format: 'raw' as any });
+
+    const chunks: Buffer[] = [];
+    for await (const chunk of result.stream) {
+      chunks.push(Buffer.from(chunk));
+    }
+    const resultBuffer = Buffer.concat(chunks);
+
+    expect(result.mimeType).toBe('application/octet-stream');
+    expect(result.extension).toBe('raw');
+    // 10*10 pixels * 3 channels = 300 bytes
+    expect(resultBuffer.length).toBe(300);
+  });
+
+  it('should process SVG input', async () => {
+    const svg = '<svg width="100" height="100"><rect width="100" height="100" fill="red"/></svg>';
+    const inputBuffer = Buffer.from(svg);
+
+    const result = await processWrapper({
+      image: inputBuffer.toString('base64'),
+      mimeType: 'image/svg+xml',
+      output: {
+        format: 'png',
+      },
+    });
+
+    expect(result.mimeType).toBe('image/png');
+    expect(result.dimensions.width).toBe(100);
+    expect(result.dimensions.height).toBe(100);
+  });
 });

@@ -17,6 +17,7 @@ export enum ImageFormat {
   PNG = 'png',
   GIF = 'gif',
   TIFF = 'tiff',
+  RAW = 'raw',
 }
 
 export class ResizeDto {
@@ -101,6 +102,10 @@ export class TransformDto {
   @IsOptional()
   @IsString()
   public backgroundColor?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  public removeAlpha?: boolean;
 }
 
 export class OutputDto {

@@ -76,9 +76,11 @@ export class ImageProcessorService {
       mimeType,
     });
 
+    const isRaw = format === 'raw';
+
     return {
       stream: resultStream,
-      mimeType: `image/${format}`,
+      mimeType: isRaw ? 'application/octet-stream' : `image/${format}`,
       extension: format,
     };
   }
@@ -157,6 +159,11 @@ export class ImageProcessorService {
       pipeline = pipeline.flatten({ background: transform.backgroundColor });
     }
 
+    // removeAlpha: remove alpha channel if requested
+    if (transform.removeAlpha) {
+      pipeline = pipeline.removeAlpha();
+    }
+
     return pipeline;
   }
 
@@ -214,6 +221,8 @@ export class ImageProcessorService {
         return pipeline.gif();
       case 'tiff':
         return pipeline.tiff({ quality });
+      case 'raw':
+        return pipeline.raw();
       default:
         throw new BadRequestException(`Unsupported format: ${format}`);
     }

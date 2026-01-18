@@ -18,6 +18,7 @@ export enum DefaultImageFormat {
   PNG = 'png',
   GIF = 'gif',
   TIFF = 'tiff',
+  RAW = 'raw',
 }
 
 export class QueueConfig {
