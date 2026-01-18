@@ -30,13 +30,16 @@
 ## Возможности
 
 - ✅ **Входные форматы**: JPEG, PNG, WebP, AVIF, GIF (включая анимированные), TIFF, BMP, SVG
-- ✅ **Выходные форматы**: JPEG, PNG, WebP, AVIF, GIF (включая анимированные), TIFF
+- ✅ **Выходные форматы**: JPEG, PNG, WebP, AVIF, GIF (включая анимированные), TIFF, RAW (uncompressed)
 - ✅ Извлечение EXIF метаданных
 - ✅ Изменение размера с различными режимами fit
 - ✅ Обрезка, поворот, отзеркаливание
 - ✅ Автоповорот на основе EXIF (autoOrient)
+- ✅ Удаление альфа-канала (removeAlpha)
 - ✅ **Водяные знаки** (графические, включая SVG) с режимами single и tile
+- ✅ Продвинутые параметры сжатия (MozJPEG, Chroma Subsampling, PNG palette)
 - ✅ Управление очередью задач с приоритетами
+- ✅ Полностью потоковая (streaming) обработка данных
 - ✅ Graceful shutdown
 
 ## Поддерживаемые Форматы
@@ -63,6 +66,7 @@
 - **AVIF** - наилучшее сжатие, но медленнее обработка
 - **GIF** - включая анимированные изображения
 - **TIFF** - для профессиональных нужд
+- **RAW** - несжатые пиксельные данные (raw pixel data)
 
 **Примечание**: BMP и JPEG XL в настоящее время не поддерживаются для записи. Для их поддержки требуются дополнительные библиотеки или кастомная сборка libvips.
 
@@ -126,7 +130,6 @@ Web UI предоставляет удобный интерфейс для те�
 - **Информация об очереди** задач (размер очереди, задачи в обработке)
 - **Возможность скачать** обработанное изображение
 
-Подробнее см. [docs/WEB_UI.md](docs/WEB_UI.md)
 
 
 ### Production Сборка
@@ -187,6 +190,7 @@ docker compose -f docker/docker-compose.yml up -d --build
 | `flip` | `boolean` | Отзеркалить по вертикали. |
 | `flop` | `boolean` | Отзеркалить по горизонтали. |
 | `backgroundColor` | `string` | Цвет фона для удаления прозрачности. |
+| `removeAlpha` | `boolean` | Удалить альфа-канал (прозрачность). |
 | `watermark` | `object` | Настройки водяного знака. Поля: `position`, `opacity`, `scale`, `mode`, `spacing`. |
 
 #### Объект `watermark` (Водяной знак):
@@ -197,7 +201,7 @@ docker compose -f docker/docker-compose.yml up -d --build
 | :--- | :--- | :--- |
 | `position` | `string` | Позиция водяного знака: `northwest`, `north`, `northeast`, `west`, `center`, `east`, `southwest`, `south`, `southeast`. По умолчанию: `southeast`. Игнорируется в режиме `tile`. |
 | `opacity` | `number` | Прозрачность водяного знака (0-1). По умолчанию: `1.0`. |
-| `scale` | `number` | Размер водяного знака в процентах от меньшей стороны изображения (1-100). По умолчанию: `10`. |
+| `scale` | `number` | Размер водяного знака в процентах от меньшей стороны основного изображения (1-100). По умолчанию: `10`. |
 | `mode` | `string` | Режим наложения: `single` (одиночный) или `tile` (повторяющийся). По умолчанию: `single`. |
 | `spacing` | `number` | Отступ между повторениями в режиме `tile` (в пикселях). По умолчанию: `0`. |
 
@@ -209,11 +213,19 @@ docker compose -f docker/docker-compose.yml up -d --build
 
 | Поле | Тип | Описание |
 | :--- | :--- | :--- |
-| `format` | `string` | Выходной формат: `webp`, `avif`, `jpeg`, `png`, `gif`, `tiff`. |
+| `format` | `string` | Выходной формат: `webp`, `avif`, `jpeg`, `png`, `gif`, `tiff`, `raw`. |
 | `quality` | `number` | Качество сжатия (1-100). |
-| `stripMetadata` | `boolean` | Удалить метаданные. |
 | `lossless` | `boolean` | Сжатие без потерь (для WebP/AVIF). |
 | `effort` | `number` | Уровень усилий при сжатии (0-9). |
+| `stripMetadata` | `boolean` | Удалить метаданные. |
+| `progressive` | `boolean` | Использовать прогрессивную развертку (для JPEG). |
+| `mozjpeg` | `boolean` | Использовать MozJPEG для сжатия (для JPEG). |
+| `chromaSubsampling` | `string` | Цветовая субдискретизация (например, `4:2:0`, `4:4:4`). |
+| `compressionLevel` | `number` | Уровень сжатия zlib (0-9) для PNG. |
+| `palette` | `boolean` | Использовать квантование цветов (палитру) для PNG. |
+| `colors` | `number` | Максимальное количество цветов в палитре (2-256) для PNG. |
+| `dither` | `number` | Уровень дизеринга (0-1.0) для PNG. |
+| `adaptiveFiltering` | `boolean` | Использовать адаптивную фильтрацию строк для PNG. |
 
 **Пример запроса (cURL):**
 ```bash
@@ -440,8 +452,8 @@ src/
 
 ### Общие Вопросы
 
-**Q: Почему нужно указывать `mimeType` в запросе?**  
-A: MIME-тип необходим для корректной обработки изображения библиотекой Sharp. Это позволяет правильно интерпретировать входные данные и применить специфичные для формата оптимизации (например, поддержка анимации для GIF).
+**Q: Нужно ли указывать `mimeType` в запросе?**  
+A: Нет, при использовании `multipart/form-data` MIME-тип файла определяется автоматически на основе заголовков загружаемой части (Content-Type части файла). Если вы используете водяной знак, его тип также определяется автоматически.
 
 **Q: Сохраняется ли прозрачность при конвертации?**  
 A: Да, прозрачность сохраняется при конвертации между форматами, которые её поддерживают (PNG, WebP, AVIF). Если вы конвертируете в формат без поддержки прозрачности (JPEG), используйте параметр `backgroundColor` для указания цвета фона.
@@ -450,7 +462,7 @@ A: Да, прозрачность сохраняется при конверта
 A: Да, микросервис полностью поддерживает анимированные GIF как на входе, так и на выходе. Все кадры анимации обрабатываются корректно.
 
 **Q: Какой максимальный размер изображения можно обработать?**  
-A: По умолчанию максимальный размер файла - 25MB (настраивается через `FILE_MAX_BYTES_MB`). Учтите, что при Base64 кодировании размер увеличивается примерно на 33%, поэтому `bodyLimit` автоматически устанавливается в 1.5x от `FILE_MAX_BYTES_MB`.
+A: По умолчанию максимальный размер файла - 25MB (настраивается через `FILE_MAX_BYTES_MB`). Сервис использует потоковую передачу, поэтому оперативную память занимают только буферы для текущих обрабатываемых задач.
 
 ### Трансформации
 
@@ -502,7 +514,7 @@ A:
 A: AVIF - новый формат с очень эффективным, но вычислительно сложным алгоритмом сжатия. Это нормально. Для ускорения уменьшите `effort` или используйте WebP.
 
 **Q: Что делать при ошибке "413 Payload Too Large"?**  
-A: Увеличьте `FILE_MAX_BYTES_MB` в конфигурации. Сервис автоматически настроит `bodyLimit` в 1.5x от этого значения для учёта Base64 кодирования.
+A: Увеличьте `FILE_MAX_BYTES_MB` в конфигурации. Это автоматически увеличит лимит входящего запроса для Fastify.
 
 ### Мониторинг и Отладка
 
@@ -582,11 +594,12 @@ curl http://localhost:8080/api/v1/health
 async function processImage() {
   const formData = new FormData();
   
-  // Добавляем файл
-  const file = new Blob([await (await fetch('file://input.jpg')).arrayBuffer()]);
-  formData.append('file', file, 'input.jpg');
+  // Добавляем файл (в Node.js можно использовать fs.createReadStream или Blob)
+  const fileResponse = await fetch('file://path/to/input.jpg');
+  const blob = await fileResponse.blob();
+  formData.append('file', blob, 'input.jpg');
   
-  // Добавляем параметры
+  // Добавляем параметры обработки
   formData.append('params', JSON.stringify({
     output: { format: 'webp', quality: 85 },
     transform: { resize: { width: 800 } }
@@ -594,12 +607,12 @@ async function processImage() {
 
   const response = await fetch('http://localhost:8080/api/v1/process', {
     method: 'POST',
-    body: formData
+    body: formData // Fetch автоматически установит правильный Content-Type с boundary
   });
 
   if (response.ok) {
-    const buffer = await response.arrayBuffer();
-    // Сохранить buffer...
+    const arrayBuffer = await response.arrayBuffer();
+    // Использовать полученный результат...
   }
 }
 ```
@@ -612,10 +625,12 @@ import requests
 def process_image(input_path, output_path):
     url = "http://localhost:8080/api/v1/process"
     
+    # Файлы для multipart/form-data
     files = {
-        'file': open(input_path, 'rb'),
+        'file': ('image.jpg', open(input_path, 'rb'), 'image/jpeg'),
     }
     
+    # Параметры обработки
     data = {
         'params': '{"output": {"format": "webp", "quality": 85}}'
     }
@@ -637,22 +652,33 @@ class ImageProcessingClient {
   constructor(private baseUrl: string = 'http://localhost:8080/api/v1') {}
 
   async processImage(options: {
-    image: Buffer;
-    mimeType: string;
-    priority?: number;
-    transform?: any;
-    output?: any;
+    file: Blob | Buffer;
+    watermark?: Blob | Buffer;
+    params?: any;
   }) {
+    const formData = new FormData();
+    
+    if (options.file instanceof Buffer) {
+      formData.append('file', new Blob([options.file]), 'image.jpg');
+    } else {
+      formData.append('file', options.file);
+    }
+
+    if (options.watermark) {
+      if (options.watermark instanceof Buffer) {
+        formData.append('watermark', new Blob([options.watermark]), 'watermark.png');
+      } else {
+        formData.append('watermark', options.watermark);
+      }
+    }
+
+    if (options.params) {
+      formData.append('params', JSON.stringify(options.params));
+    }
+
     const response = await fetch(`${this.baseUrl}/process`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        image: options.image.toString('base64'),
-        mimeType: options.mimeType,
-        priority: options.priority ?? 2,
-        transform: options.transform,
-        output: options.output,
-      }),
+      body: formData,
     });
 
     if (!response.ok) {
@@ -660,24 +686,25 @@ class ImageProcessingClient {
       throw new Error(`Processing failed: ${error.message}`);
     }
 
-    const result = await response.json();
+    const blob = await response.blob();
     return {
-      buffer: Buffer.from(result.buffer, 'base64'),
-      size: result.size,
-      mimeType: result.mimeType,
-      dimensions: result.dimensions,
-      stats: result.stats,
+      blob,
+      mimeType: response.headers.get('Content-Type'),
+      filename: response.headers.get('Content-Disposition')?.split('filename=')[1]?.replace(/"/g, ''),
     };
   }
 
-  async extractExif(image: Buffer, mimeType: string) {
+  async extractExif(file: Blob | Buffer) {
+    const formData = new FormData();
+    if (file instanceof Buffer) {
+      formData.append('file', new Blob([file]), 'image.jpg');
+    } else {
+      formData.append('file', file);
+    }
+
     const response = await fetch(`${this.baseUrl}/exif`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        image: image.toString('base64'),
-        mimeType,
-      }),
+      body: formData,
     });
 
     if (!response.ok) {
@@ -695,24 +722,27 @@ class ImageProcessingClient {
 
 // Использование
 const client = new ImageProcessingClient();
-const imageBuffer = await readFile('photo.jpg');
+const imageResponse = await fetch('https://example.com/photo.jpg');
+const imageBlob = await imageResponse.blob();
 
 const result = await client.processImage({
-  image: imageBuffer,
-  mimeType: 'image/jpeg',
-  priority: 0, // высокий приоритет
-  transform: {
-    resize: { maxDimension: 2048 },
-    autoOrient: true,
-  },
-  output: {
-    format: 'avif',
-    quality: 80,
-    effort: 6,
+  file: imageBlob,
+  params: {
+    priority: 0,
+    transform: {
+      resize: { maxDimension: 2048 },
+      autoOrient: true,
+    },
+    output: {
+      format: 'avif',
+      quality: 80,
+      effort: 6,
+    },
   },
 });
 
-await writeFile('output.avif', result.buffer);
+// Сохранение в файл в браузере или Node.js
+// const buffer = Buffer.from(await result.blob.arrayBuffer());
 ```
 
 ## Статус Разработки
@@ -745,9 +775,9 @@ await writeFile('output.avif', result.buffer);
 
 ## Roadmap
 
-### ✅ v1.1 (Фаза 2) - Частично завершен
+### ✅ v1.1 (Фаза 2) - Завершен
 - [x] **Водяные знаки (watermarks)** - графические водяные знаки с режимами single и tile
-- [ ] Опциональная поддержка BMP на запись (требует доп. библиотек)
+- [x] **SVG как входной формат** - поддержка векторной графики
 - [ ] Опциональная поддержка JPEG XL (требует кастомной сборки libvips)
 - [ ] Умная обрезка (Smart Crop) с использованием entropy/attention
 - [ ] Поддержка ICC профилей
