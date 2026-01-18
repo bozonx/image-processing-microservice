@@ -2,11 +2,7 @@ import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import sharp from 'sharp';
 import { Readable } from 'node:stream';
-import {
-  TransformDto,
-  OutputDto,
-  WatermarkDto,
-} from '../dto/process-image.dto.js';
+import { TransformDto, OutputDto, WatermarkDto } from '../dto/process-image.dto.js';
 import type { ImageDefaults, ImageConfig } from '../../../config/image.config.js';
 
 interface StreamProcessResult {

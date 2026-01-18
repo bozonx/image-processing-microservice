@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsNumber, Min, Max } from 'class-validator';
+import { IsOptional, IsNumber, Min, Max } from 'class-validator';
 
 export class ExtractExifDto {
   @IsOptional()

@@ -45,20 +45,18 @@ describe('ImageProcessingController', () => {
     queueService = module.get<QueueService>(QueueService);
   });
 
-  const mockFile = (fields = {}) => ({
-    file: 'mock-stream',
-    mimetype: 'image/jpeg',
-    fields,
-  });
-
   const mockReq = (
     partsData: any[] = [],
     headers: Record<string, string> = { 'content-type': 'multipart/form-data' },
   ) => ({
     headers,
-    file: jest.fn().mockImplementation(async () => partsData[0]),
-    files: jest.fn().mockImplementation(() => {
+    file: jest.fn().mockImplementation(async () => {
+      await Promise.resolve();
+      return partsData.find(p => p.type === 'file') ?? partsData[0];
+    }),
+    parts: jest.fn().mockImplementation(() => {
       async function* gen() {
+        await Promise.resolve();
         for (const part of partsData) {
           yield part;
         }
@@ -143,14 +141,11 @@ describe('ImageProcessingController', () => {
       const paramsPart = {
         type: 'field',
         fieldname: 'params',
-        toBuffer: async () =>
-          Buffer.from(
-            JSON.stringify({
-              transform: {
-                watermark: { mode: 'single' },
-              },
-            }),
-          ),
+        value: JSON.stringify({
+          transform: {
+            watermark: { mode: 'single' },
+          },
+        }),
       };
 
       const req = mockReq([filePart, watermarkPart, paramsPart]);
@@ -192,14 +187,11 @@ describe('ImageProcessingController', () => {
       const paramsPart = {
         type: 'field',
         fieldname: 'params',
-        toBuffer: async () =>
-          Buffer.from(
-            JSON.stringify({
-              transform: {
-                watermark: { mode: 'single' },
-              },
-            }),
-          ),
+        value: JSON.stringify({
+          transform: {
+            watermark: { mode: 'single' },
+          },
+        }),
       };
 
       const req = mockReq([filePart, paramsPart]);
@@ -218,7 +210,7 @@ describe('ImageProcessingController', () => {
       const paramsPart = {
         type: 'field',
         fieldname: 'params',
-        toBuffer: async () => Buffer.from('{ invalid json }'),
+        value: '{ invalid json }',
       };
 
       const req = mockReq([filePart, paramsPart]);
