@@ -61,7 +61,7 @@ async function bootstrap() {
   await app.register(import('@fastify/multipart'), {
     limits: {
       fileSize: imageConfig.maxBytes,
-      files: 1, // Only allow one file per request
+      files: 2, // Allow up to 2 files (main image and watermark)
       fieldSize: 10 * 1024 * 1024, // 10MB limit for JSON fields (params)
     },
   });

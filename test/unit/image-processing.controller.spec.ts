@@ -51,7 +51,10 @@ describe('ImageProcessingController', () => {
     fields,
   });
 
-  const mockReq = (partsData: any[] = [], headers: Record<string, string> = { 'content-type': 'multipart/form-data' }) => ({
+  const mockReq = (
+    partsData: any[] = [],
+    headers: Record<string, string> = { 'content-type': 'multipart/form-data' },
+  ) => ({
     headers,
     file: jest.fn().mockImplementation(async () => partsData[0]),
     files: jest.fn().mockImplementation(() => {
@@ -99,7 +102,7 @@ describe('ImageProcessingController', () => {
         mimetype: 'image/jpeg',
         file: Readable.from([Buffer.from('test-data')]),
       };
-      
+
       const req = mockReq([filePart]);
       const res = mockRes();
       const processedResult = {
@@ -140,11 +143,14 @@ describe('ImageProcessingController', () => {
       const paramsPart = {
         type: 'field',
         fieldname: 'params',
-        toBuffer: async () => Buffer.from(JSON.stringify({
-          transform: {
-            watermark: { mode: 'single' }
-          }
-        })),
+        toBuffer: async () =>
+          Buffer.from(
+            JSON.stringify({
+              transform: {
+                watermark: { mode: 'single' },
+              },
+            }),
+          ),
       };
 
       const req = mockReq([filePart, watermarkPart, paramsPart]);
@@ -186,17 +192,37 @@ describe('ImageProcessingController', () => {
       const paramsPart = {
         type: 'field',
         fieldname: 'params',
-        toBuffer: async () => Buffer.from(JSON.stringify({
-          transform: {
-            watermark: { mode: 'single' }
-          }
-        })),
+        toBuffer: async () =>
+          Buffer.from(
+            JSON.stringify({
+              transform: {
+                watermark: { mode: 'single' },
+              },
+            }),
+          ),
       };
 
       const req = mockReq([filePart, paramsPart]);
       await expect(controller.process(req as any, {} as any)).rejects.toThrow(
-        'Watermark file is required when watermark config is provided'
+        'Watermark file is required when watermark config is provided',
       );
+    });
+
+    it('should throw BadRequestException for invalid JSON params', async () => {
+      const filePart = {
+        type: 'file',
+        fieldname: 'file',
+        mimetype: 'image/jpeg',
+        file: Readable.from([Buffer.from('main-image')]),
+      };
+      const paramsPart = {
+        type: 'field',
+        fieldname: 'params',
+        toBuffer: async () => Buffer.from('{ invalid json }'),
+      };
+
+      const req = mockReq([filePart, paramsPart]);
+      await expect(controller.process(req as any, {} as any)).rejects.toThrow(BadRequestException);
     });
   });
 

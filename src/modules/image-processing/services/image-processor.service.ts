@@ -2,9 +2,13 @@ import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import sharp from 'sharp';
 import { Readable } from 'node:stream';
-import { ProcessImageDto, TransformDto, OutputDto } from '../dto/process-image.dto.js';
+import {
+  ProcessImageDto,
+  TransformDto,
+  OutputDto,
+  WatermarkDto,
+} from '../dto/process-image.dto.js';
 import type { ImageDefaults, ImageConfig } from '../../../config/image.config.js';
-
 
 interface StreamProcessResult {
   stream: Readable;
@@ -27,7 +31,6 @@ export class ImageProcessorService {
     this.maxBytes = config.maxBytes;
     this.defaults = config.defaults;
   }
-
 
   /**
    * Processes an image stream based on the provided parameters.
@@ -56,27 +59,25 @@ export class ImageProcessorService {
     let pipeline = sharp({ ...options, failOnError: false });
 
     pipeline = this.applyTransformations(pipeline, transform);
-    
+
     // Apply watermark if provided
     if (watermark && transform?.watermark) {
       // We need to get metadata first, so we'll buffer the input
       const inputBuffer = await this.streamToBuffer(inputStream);
       pipeline = sharp(inputBuffer, { ...options, failOnError: false });
       pipeline = this.applyTransformations(pipeline, transform);
-      
+
       const metadata = await pipeline.metadata();
       await this.applyWatermark(pipeline, watermark.buffer, transform.watermark, metadata);
     }
-    
+
     pipeline = this.applyOutputFormat(pipeline, output);
 
     // Pipe the input stream into the sharp pipeline (if not buffered for watermark)
-    const resultStream = watermark && transform?.watermark 
-      ? pipeline 
-      : inputStream.pipe(pipeline);
-    
+    const resultStream = watermark && transform?.watermark ? pipeline : inputStream.pipe(pipeline);
+
     // Listen for pipeline errors to avoid unhandled stream errors
-    pipeline.on('error', (err) => {
+    pipeline.on('error', err => {
       this.logger.error({
         msg: 'Sharp pipeline error',
         error: err.message,
@@ -101,7 +102,6 @@ export class ImageProcessorService {
       extension: format,
     };
   }
-
 
   /**
    * Returns specific sharp options based on MIME type (e.g., enabling animation for GIFs).
@@ -270,7 +270,7 @@ export class ImageProcessorService {
   private async applyWatermark(
     pipeline: sharp.Sharp,
     watermarkBuffer: Buffer,
-    watermarkConfig: import('../dto/process-image.dto.js').WatermarkDto,
+    watermarkConfig: WatermarkDto,
     metadata: sharp.Metadata,
   ): Promise<void> {
     const { width = 0, height = 0 } = metadata;
@@ -307,7 +307,7 @@ export class ImageProcessorService {
    */
   private async createSingleWatermark(
     watermarkBuffer: Buffer,
-    config: import('../dto/process-image.dto.js').WatermarkDto,
+    config: WatermarkDto,
     imageWidth: number,
     imageHeight: number,
   ): Promise<sharp.OverlayOptions> {
@@ -337,7 +337,7 @@ export class ImageProcessorService {
    */
   private async createTiledWatermark(
     watermarkBuffer: Buffer,
-    config: import('../dto/process-image.dto.js').WatermarkDto,
+    config: WatermarkDto,
     imageWidth: number,
     imageHeight: number,
   ): Promise<sharp.OverlayOptions[]> {

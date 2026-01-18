@@ -1,3 +1,4 @@
+import 'reflect-metadata';
 /**
  * Unit tests global setup
  *

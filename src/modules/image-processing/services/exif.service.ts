@@ -25,10 +25,7 @@ export class ExifService {
    * @param mimeType - The MIME type of the image.
    * @returns A record of EXIF data or null if extraction fails or no data is found.
    */
-  public async extract(
-    stream: Readable,
-    mimeType: string,
-  ): Promise<Record<string, any> | null> {
+  public async extract(stream: Readable, mimeType: string): Promise<Record<string, any> | null> {
     const startTime = Date.now();
 
     try {

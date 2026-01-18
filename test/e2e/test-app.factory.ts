@@ -26,8 +26,8 @@ export async function createTestApp(): Promise<NestFastifyApplication> {
   await app.register(import('@fastify/multipart'), {
     limits: {
       fileSize: 25 * 1024 * 1024, // 25MB default for tests
-      files: 1,
-      fieldSize: 1024 * 1024,
+      files: 2,
+      fieldSize: 1024 * 1024, // 1MB for params field
     },
   });
 

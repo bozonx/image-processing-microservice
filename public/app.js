@@ -6,6 +6,7 @@ const API_BASE = '/api/v1';
 let currentFile = null;
 let currentMimeType = null;
 let currentBase64 = null;
+let watermarkFile = null;
 let exifFile = null;
 let exifMimeType = null;
 let exifBase64 = null;
@@ -14,6 +15,7 @@ let exifBase64 = null;
 document.addEventListener('DOMContentLoaded', () => {
   initializeTabs();
   initializeProcessTab();
+  initializeWatermark();
   initializeExifTab();
   initializeAccordions();
   checkHealth();
@@ -168,6 +170,7 @@ function clearProcessForm() {
   currentFile = null;
   currentMimeType = null;
   currentBase64 = null;
+  clearWatermark();
 
   document.getElementById('uploadArea').style.display = 'block';
   document.getElementById('previewContainer').style.display = 'none';
@@ -184,6 +187,11 @@ async function processImage() {
 
   const formData = new FormData();
   formData.append('file', currentFile);
+
+  // Add watermark file if present
+  if (watermarkFile) {
+    formData.append('watermark', watermarkFile);
+  }
 
   const priority = parseInt(document.querySelector('input[name="priority"]:checked').value);
   const params = {
@@ -275,6 +283,24 @@ function buildTransformObject() {
   const backgroundColor = document.getElementById('backgroundColor').value.trim();
   if (backgroundColor) {
     transform.backgroundColor = backgroundColor;
+  }
+
+  // Watermark
+  if (watermarkFile) {
+    const watermark = {};
+    const mode = document.getElementById('watermarkMode').value;
+    const position = document.getElementById('watermarkPosition').value;
+    const opacity = parseFloat(document.getElementById('watermarkOpacity').value);
+    const scale = parseInt(document.getElementById('watermarkScale').value);
+    const spacing = parseInt(document.getElementById('watermarkSpacing').value);
+
+    if (mode) watermark.mode = mode;
+    if (position && mode === 'single') watermark.position = position;
+    if (opacity !== undefined && !isNaN(opacity)) watermark.opacity = opacity;
+    if (scale) watermark.scale = scale;
+    if (spacing !== undefined && !isNaN(spacing) && mode === 'tile') watermark.spacing = spacing;
+
+    transform.watermark = watermark;
   }
 
   return transform;
@@ -399,6 +425,99 @@ function downloadResult() {
   // But strictly speaking, we should manage it better
 
   showToast('Image downloaded!', 'success');
+}
+
+// Watermark
+function initializeWatermark() {
+  const watermarkUploadArea = document.getElementById('watermarkUploadArea');
+  const watermarkInput = document.getElementById('watermarkInput');
+  const clearWatermarkBtn = document.getElementById('clearWatermarkBtn');
+  const watermarkMode = document.getElementById('watermarkMode');
+
+  // Upload area click
+  watermarkUploadArea.addEventListener('click', () => watermarkInput.click());
+
+  // File input change
+  watermarkInput.addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (file) handleWatermarkUpload(file);
+  });
+
+  // Clear button
+  clearWatermarkBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    clearWatermark();
+  });
+
+  // Mode change - toggle position and spacing fields
+  watermarkMode.addEventListener('change', (e) => {
+    const mode = e.target.value;
+    const positionField = document.getElementById('watermarkPositionField');
+    const spacingField = document.getElementById('watermarkSpacingField');
+
+    if (mode === 'tile') {
+      positionField.style.display = 'none';
+      spacingField.style.display = 'block';
+    } else {
+      positionField.style.display = 'block';
+      spacingField.style.display = 'none';
+    }
+  });
+}
+
+async function handleWatermarkUpload(file) {
+  // Validate file type
+  const validTypes = ['image/png', 'image/svg+xml', 'image/webp', 'image/avif'];
+  if (!validTypes.includes(file.type)) {
+    showToast('Please upload a PNG, SVG, WebP, or AVIF file', 'error');
+    return;
+  }
+
+  watermarkFile = file;
+
+  try {
+    // Show preview
+    const watermarkUploadArea = document.getElementById('watermarkUploadArea');
+    const watermarkPreviewContainer = document.getElementById('watermarkPreviewContainer');
+    const watermarkPreview = document.getElementById('watermarkPreview');
+    const watermarkFileName = document.getElementById('watermarkFileName');
+
+    // Create preview URL
+    const url = URL.createObjectURL(file);
+    watermarkPreview.src = url;
+    watermarkFileName.textContent = file.name;
+
+    // Toggle visibility
+    watermarkUploadArea.style.display = 'none';
+    watermarkPreviewContainer.style.display = 'block';
+
+    showToast('Watermark uploaded successfully', 'success');
+  } catch (error) {
+    showToast('Failed to load watermark', 'error');
+    watermarkFile = null;
+  }
+}
+
+function clearWatermark() {
+  watermarkFile = null;
+
+  const watermarkUploadArea = document.getElementById('watermarkUploadArea');
+  const watermarkPreviewContainer = document.getElementById('watermarkPreviewContainer');
+  const watermarkInput = document.getElementById('watermarkInput');
+  const watermarkPreview = document.getElementById('watermarkPreview');
+
+  // Clear input
+  watermarkInput.value = '';
+
+  // Revoke object URL if exists
+  if (watermarkPreview.src) {
+    URL.revokeObjectURL(watermarkPreview.src);
+    watermarkPreview.src = '';
+  }
+
+  // Toggle visibility
+  watermarkUploadArea.style.display = 'block';
+  watermarkPreviewContainer.style.display = 'none';
 }
 
 // EXIF Tab

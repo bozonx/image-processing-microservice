@@ -1,3 +1,4 @@
+import 'reflect-metadata';
 /**
  * E2E tests global setup
  *

@@ -206,6 +206,73 @@
                             </div>
                         </div>
                     </div>
+
+                    <div class="accordion">
+                        <button class="accordion-header" type="button">
+                            <span>Watermark</span>
+                            <span class="accordion-icon">▼</span>
+                        </button>
+                        <div class="accordion-content">
+                            <div class="watermark-upload-area" id="watermarkUploadArea">
+                                <input type="file" id="watermarkInput" accept="image/png,image/svg+xml,image/webp,image/avif" hidden>
+                                <div class="watermark-upload-content">
+                                    <div class="watermark-upload-icon">💧</div>
+                                    <p class="watermark-upload-text">Click to upload watermark</p>
+                                    <p class="watermark-upload-hint">PNG, SVG, WebP, AVIF</p>
+                                </div>
+                            </div>
+                            
+                            <div class="watermark-preview-container" id="watermarkPreviewContainer" style="display: none;">
+                                <div class="watermark-preview-header">
+                                    <span id="watermarkFileName">watermark.png</span>
+                                    <button class="btn-icon-small" id="clearWatermarkBtn" type="button">✕</button>
+                                </div>
+                                <img id="watermarkPreview" alt="Watermark preview">
+                            </div>
+
+                            <div class="form-field">
+                                <label>Mode</label>
+                                <select id="watermarkMode">
+                                    <option value="single">Single (positioned)</option>
+                                    <option value="tile">Tile (repeated)</option>
+                                </select>
+                            </div>
+
+                            <div class="form-field" id="watermarkPositionField">
+                                <label>Position</label>
+                                <select id="watermarkPosition">
+                                    <option value="southeast">Southeast (default)</option>
+                                    <option value="northwest">Northwest</option>
+                                    <option value="north">North</option>
+                                    <option value="northeast">Northeast</option>
+                                    <option value="west">West</option>
+                                    <option value="center">Center</option>
+                                    <option value="east">East</option>
+                                    <option value="southwest">Southwest</option>
+                                    <option value="south">South</option>
+                                </select>
+                            </div>
+
+                            <div class="form-field">
+                                <label>Opacity (0.0-1.0)</label>
+                                <input type="number" id="watermarkOpacity" min="0" max="1" step="0.1" value="1.0" placeholder="1.0">
+                            </div>
+
+                            <div class="form-field">
+                                <label>Scale (% of image, 1-100)</label>
+                                <input type="number" id="watermarkScale" min="1" max="100" value="10" placeholder="10">
+                            </div>
+
+                            <div class="form-field" id="watermarkSpacingField" style="display: none;">
+                                <label>Spacing (px, for tile mode)</label>
+                                <input type="number" id="watermarkSpacing" min="0" value="0" placeholder="0">
+                            </div>
+
+                            <div class="watermark-info">
+                                <p><strong>Note:</strong> For SVG watermarks, ensure text is converted to paths.</p>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                 <div class="control-group">

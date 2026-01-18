@@ -72,8 +72,27 @@ export class ExtractDto {
 
 export class WatermarkDto {
   @IsOptional()
-  @IsEnum(['northwest', 'north', 'northeast', 'west', 'center', 'east', 'southwest', 'south', 'southeast'])
-  public position?: 'northwest' | 'north' | 'northeast' | 'west' | 'center' | 'east' | 'southwest' | 'south' | 'southeast';
+  @IsEnum([
+    'northwest',
+    'north',
+    'northeast',
+    'west',
+    'center',
+    'east',
+    'southwest',
+    'south',
+    'southeast',
+  ])
+  public position?:
+    | 'northwest'
+    | 'north'
+    | 'northeast'
+    | 'west'
+    | 'center'
+    | 'east'
+    | 'southwest'
+    | 'south'
+    | 'southeast';
 
   @IsOptional()
   @IsNumber()
@@ -139,7 +158,6 @@ export class TransformDto {
   @Type(() => WatermarkDto)
   public watermark?: WatermarkDto;
 }
-
 
 export class OutputDto {
   @IsOptional()

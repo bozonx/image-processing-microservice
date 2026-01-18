@@ -1,7 +1,6 @@
 import {
   Controller,
   Post,
-  Body,
   HttpCode,
   HttpStatus,
   Req,
@@ -48,14 +47,13 @@ export class ImageProcessingController {
     }
 
     // Process multiple files (main file and optional watermark)
-    const parts = req.files();
+    const parts = req.parts();
     let mainFileData: { buffer: Buffer; mimetype: string } | null = null;
     let watermarkFileData: { buffer: Buffer; mimetype: string } | null = null;
     let dto = new ProcessImageDto();
 
     for await (const part of parts) {
       if (part.type === 'file') {
-        // Buffer the file in memory
         const chunks: Buffer[] = [];
         for await (const chunk of part.file) {
           chunks.push(chunk);
@@ -68,17 +66,17 @@ export class ImageProcessingController {
           watermarkFileData = { buffer, mimetype: part.mimetype };
         }
       } else if (part.type === 'field' && part.fieldname === 'params') {
-        // Parse params from form field
         try {
-          // For field type, we need to read the value
-          const fieldValue = await part.toBuffer();
-          const parsed = JSON.parse(fieldValue.toString('utf-8'));
+          const fieldValue = part.value as string;
+          const parsed = JSON.parse(fieldValue);
           dto = plainToInstance(ProcessImageDto, parsed);
+
           const errors = await validate(dto);
           if (errors.length > 0) {
             throw new BadRequestException(errors.toString());
           }
         } catch (e) {
+          if (e instanceof BadRequestException) throw e;
           throw new BadRequestException('Invalid params format');
         }
       }
@@ -102,18 +100,20 @@ export class ImageProcessingController {
         mainFileData.mimetype,
         dto.transform,
         dto.output,
-        watermarkFileData ? {
-          buffer: watermarkFileData.buffer,
-          mimetype: watermarkFileData.mimetype,
-        } : undefined,
+        watermarkFileData
+          ? {
+              buffer: watermarkFileData.buffer,
+              mimetype: watermarkFileData.mimetype,
+            }
+          : undefined,
       );
 
       res.type(result.mimeType);
-      res.header('Content-Disposition', `inline; filename=\"processed.${result.extension}\"`);
-      
+      res.header('Content-Disposition', `inline; filename="processed.${result.extension}"`);
+
       // Pipe the sharp output to the response
       res.send(result.stream);
-      
+
       // Wait until the response is completely sent to the client
       await finished(res.raw);
     }, priority);
@@ -142,11 +142,9 @@ export class ImageProcessingController {
     // Parse params from form field to get priority if provided
     let dto = new ExtractExifDto();
     const paramsField = data.fields['params'];
-    const paramValue = 
-      paramsField && 
-      !Array.isArray(paramsField) && 
-      paramsField.type === 'field' 
-        ? (paramsField as any).value 
+    const paramValue =
+      paramsField && !Array.isArray(paramsField) && paramsField.type === 'field'
+        ? (paramsField as any).value
         : undefined;
 
     if (paramValue) {
@@ -157,7 +155,7 @@ export class ImageProcessingController {
         if (errors.length > 0) {
           throw new BadRequestException(errors.toString());
         }
-      } catch (e) {
+      } catch (_e) {
         throw new BadRequestException('Invalid params format');
       }
     }
