@@ -226,13 +226,14 @@ SHUTDOWN_TIMEOUT_MS=30000
 
 #### Dockerfile
 ```dockerfile
-FROM node:22-alpine
+FROM node:22-bookworm-slim
 
 # Установка системных зависимостей для Sharp
-RUN apk add --no-cache \
-    vips-dev \
-    build-base \
-    python3
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libvips-dev \
+    python3 \
+    build-essential \
+  && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
@@ -247,8 +248,8 @@ RUN npm install -g pnpm@10.13.1 && \
 COPY dist ./dist
 
 # Создание non-root пользователя
-RUN addgroup -g 1001 -S nodejs && \
-    adduser -S nodejs -u 1001
+RUN groupadd -g 1001 nodejs && \
+    useradd -u 1001 -g 1001 -m -s /usr/sbin/nologin nodejs
 
 USER nodejs
 

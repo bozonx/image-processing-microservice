@@ -601,14 +601,14 @@ SHUTDOWN_TIMEOUT_MS=30000             # Таймаут graceful shutdown
 ### 8.1 Docker
 
 #### 8.1.1 Требования к Dockerfile
-- Базовый образ: `node:22-alpine`
-- Системные зависимости: `vips-dev`, `build-base`, `python3`
+- Базовый образ: `node:22-bookworm-slim`
+- Системные зависимости: `libvips-dev`, `build-essential`, `python3`
 - Multi-stage build для оптимизации
 - Выполнение от non-root пользователя
 - Включен health check
 
 #### 8.1.2 Оптимизация Размера Образа
-- Использовать Alpine Linux
+- Использовать slim-образ на Debian (bookworm)
 - Удалять build зависимости после установки
 - Минимизировать слои
 

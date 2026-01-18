@@ -1,11 +1,12 @@
 ARG NODE_MAJOR=22
-FROM node:${NODE_MAJOR}-alpine
+FROM node:${NODE_MAJOR}-bookworm-slim
 
 # Install system dependencies for Sharp
-RUN apk add --no-cache \
-    vips-dev \
-    build-base \
-    python3
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libvips-dev \
+    python3 \
+    build-essential \
+  && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
@@ -26,8 +27,8 @@ RUN pnpm install --prod --frozen-lockfile --prefer-offline || pnpm install --pro
 COPY dist ./dist
 
 # Create non-root user
-RUN addgroup -g 1001 -S nodejs && \
-    adduser -S nodejs -u 1001
+RUN groupadd -g 1001 nodejs && \
+    useradd -u 1001 -g 1001 -m -s /usr/sbin/nologin nodejs
 
 USER nodejs
 
