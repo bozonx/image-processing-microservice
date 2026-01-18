@@ -11,6 +11,8 @@ import {
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
+import { finished } from 'node:stream/promises';
+import { Readable } from 'node:stream';
 import { ImageProcessorService } from './services/image-processor.service.js';
 import { ExifService } from './services/exif.service.js';
 import { QueueService } from './services/queue.service.js';
@@ -39,6 +41,12 @@ export class ImageProcessingController {
   @Post('process')
   @HttpCode(HttpStatus.OK)
   public async process(@Req() req: FastifyRequest, @Res() res: FastifyReply) {
+    // Preliminary validation: check headers before reading the body
+    const contentType = req.headers['content-type'];
+    if (!contentType?.includes('multipart/form-data')) {
+      throw new BadRequestException('Invalid content type, expected multipart/form-data');
+    }
+
     const data = await req.file();
     if (!data) {
       throw new BadRequestException('No file uploaded');
@@ -68,20 +76,32 @@ export class ImageProcessingController {
       }
     }
 
+    // Buffer the file in memory to provide backpressure and release Fastify's resources early
+    const chunks: Buffer[] = [];
+    for await (const chunk of data.file) {
+      chunks.push(chunk);
+    }
+    const buffer = Buffer.concat(chunks);
     const priority = dto.priority ?? 2;
 
-    const result = await this.queueService.add(async () => {
-      return this.imageProcessor.processStream(
-        data.file,
+    // Use queue to process the image and hold the slot until the response is finished
+    await this.queueService.add(async () => {
+      const result = await this.imageProcessor.processStream(
+        Readable.from(buffer),
         data.mimetype,
         dto.transform,
         dto.output,
       );
-    }, priority);
 
-    res.type(result.mimeType);
-    res.header('Content-Disposition', `inline; filename="processed.${result.extension}"`);
-    return res.send(result.stream);
+      res.type(result.mimeType);
+      res.header('Content-Disposition', `inline; filename="processed.${result.extension}"`);
+      
+      // Pipe the sharp output to the response
+      res.send(result.stream);
+      
+      // Wait until the response is completely sent to the client
+      await finished(res.raw);
+    }, priority);
   }
 
   /**
@@ -93,6 +113,12 @@ export class ImageProcessingController {
   @Post('exif')
   @HttpCode(HttpStatus.OK)
   public async extractExif(@Req() req: FastifyRequest) {
+    // Preliminary validation
+    const contentType = req.headers['content-type'];
+    if (!contentType?.includes('multipart/form-data')) {
+      throw new BadRequestException('Invalid content type, expected multipart/form-data');
+    }
+
     const data = await req.file();
     if (!data) {
       throw new BadRequestException('No file uploaded');
@@ -121,10 +147,16 @@ export class ImageProcessingController {
       }
     }
 
+    // Buffer for backpressure
+    const chunks: Buffer[] = [];
+    for await (const chunk of data.file) {
+      chunks.push(chunk);
+    }
+    const buffer = Buffer.concat(chunks);
     const priority = dto.priority ?? 2;
 
     const result = await this.queueService.add(async () => {
-      const exif = await this.exifService.extract(data.file, data.mimetype);
+      const exif = await this.exifService.extract(Readable.from(buffer), data.mimetype);
       return { exif };
     }, priority);
 

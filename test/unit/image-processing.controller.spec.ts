@@ -1,6 +1,7 @@
 import { jest, describe, it, expect, beforeEach } from '@jest/globals';
 import { Test, type TestingModule } from '@nestjs/testing';
 import { BadRequestException } from '@nestjs/common';
+import { Readable, Writable } from 'node:stream';
 import { ImageProcessingController } from '../../src/modules/image-processing/image-processing.controller.js';
 import { ImageProcessorService } from '../../src/modules/image-processing/services/image-processor.service.js';
 import { ExifService } from '../../src/modules/image-processing/services/exif.service.js';
@@ -50,15 +51,33 @@ describe('ImageProcessingController', () => {
     fields,
   });
 
-  const mockReq = (fileData: any) => ({
-    file: jest.fn().mockResolvedValue(fileData),
+  const mockReq = (fileData: any, headers: Record<string, string> = { 'content-type': 'multipart/form-data' }) => ({
+    headers,
+    file: jest.fn<() => Promise<any>>().mockResolvedValue(fileData),
   });
 
-  const mockRes = () => ({
-    type: jest.fn().mockReturnThis(),
-    header: jest.fn().mockReturnThis(),
-    send: jest.fn().mockReturnThis(),
-  });
+  const mockRes = () => {
+    const raw = new (class extends Writable {
+      _header = true;
+      constructor() {
+        super();
+        setTimeout(() => {
+          this.end();
+        }, 0);
+      }
+      _write(_chunk: any, _encoding: string, callback: (error?: Error | null) => void) {
+        callback();
+      }
+    })();
+
+    const res = {
+      type: jest.fn().mockReturnThis(),
+      header: jest.fn().mockReturnThis(),
+      send: jest.fn().mockReturnThis(),
+      raw,
+    };
+    return res;
+  };
 
   it('should be defined', () => {
     expect(controller).toBeDefined();
@@ -66,7 +85,10 @@ describe('ImageProcessingController', () => {
 
   describe('process', () => {
     it('should call imageProcessor.processStream and return stream', async () => {
-      const file = mockFile();
+      const file = {
+        ...mockFile(),
+        file: Readable.from([Buffer.from('test-data')]),
+      };
       const req = mockReq(file);
       const res = mockRes();
       const processedResult = {
@@ -81,7 +103,7 @@ describe('ImageProcessingController', () => {
 
       expect(queueService.add).toHaveBeenCalled();
       expect(imageProcessor.processStream).toHaveBeenCalledWith(
-        file.file,
+        expect.any(Readable),
         file.mimetype,
         undefined,
         undefined,
@@ -98,7 +120,10 @@ describe('ImageProcessingController', () => {
 
   describe('extractExif', () => {
     it('should call exifService.extract and return result', async () => {
-      const file = mockFile();
+      const file = {
+        ...mockFile(),
+        file: Readable.from([Buffer.from('test-data')]),
+      };
       const req = mockReq(file);
       const exifData = { Make: 'Canon' };
 
@@ -107,7 +132,7 @@ describe('ImageProcessingController', () => {
       const result = await controller.extractExif(req as any);
 
       expect(queueService.add).toHaveBeenCalled();
-      expect(exifService.extract).toHaveBeenCalledWith(file.file, file.mimetype);
+      expect(exifService.extract).toHaveBeenCalledWith(expect.any(Readable), file.mimetype);
       expect(result).toEqual({ exif: exifData });
     });
   });
