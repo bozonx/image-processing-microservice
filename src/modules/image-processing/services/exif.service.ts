@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import exifr from 'exifr';
+import { Readable } from 'node:stream';
 import type { ImageConfig } from '../../../config/image.config.js';
 
 /**
@@ -67,5 +68,26 @@ export class ExifService {
 
       return null;
     }
+  }
+
+  /**
+   * Extracts EXIF metadata from an image stream.
+   * Note: This method buffers the entire stream into memory because exifr requires a buffer.
+   *
+   * @param stream - The image data stream.
+   * @param mimeType - The MIME type of the image.
+   * @returns A record of EXIF data or null.
+   */
+  public async extractFromStream(
+    stream: Readable,
+    mimeType: string,
+  ): Promise<Record<string, any> | null> {
+    const chunks: Buffer[] = [];
+    for await (const chunk of stream) {
+      chunks.push(Buffer.from(chunk));
+    }
+    const buffer = Buffer.concat(chunks);
+
+    return this.extract(buffer, mimeType);
   }
 }

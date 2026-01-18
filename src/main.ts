@@ -57,6 +57,15 @@ async function bootstrap() {
   const globalPrefix = appConfig.basePath ? `${appConfig.basePath}/api/v1` : 'api/v1';
   app.setGlobalPrefix(globalPrefix);
 
+  // Register multipart support for streaming uploads
+  await app.register(import('@fastify/multipart'), {
+    limits: {
+      fileSize: imageConfig.maxBytes,
+      files: 1, // Only allow one file per request
+      fieldSize: 10 * 1024 * 1024, // 10MB limit for JSON fields (params)
+    },
+  });
+
   // Register static files serving for UI
   const publicPath = join(__dirname, '..', '..', 'public');
   await app.register(fastifyStatic, {

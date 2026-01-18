@@ -1,6 +1,7 @@
 import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import sharp from 'sharp';
+import { Readable } from 'node:stream';
 import { ProcessImageDto, TransformDto, OutputDto } from '../dto/process-image.dto.js';
 import type { ImageDefaults, ImageConfig } from '../../../config/image.config.js';
 
@@ -10,6 +11,12 @@ interface ProcessResult {
   mimeType: string;
   dimensions: { width: number; height: number };
   stats?: { beforeBytes: number; afterBytes: number; reductionPercent: number };
+}
+
+interface StreamProcessResult {
+  stream: Readable;
+  mimeType: string;
+  extension: string;
 }
 
 /**
@@ -94,6 +101,60 @@ export class ImageProcessorService {
 
       throw error;
     }
+  }
+
+  /**
+   * Processes an image stream based on the provided parameters.
+   * Uses sharp pipeline to avoid loading the entire image into memory.
+   *
+   * @param inputStream - Readable stream of the input image.
+   * @param mimeType - The MIME type of the input image.
+   * @param transform - Transformation settings.
+   * @param output - Output format settings.
+   * @returns An object containing the processed image stream and metadata.
+   */
+  public async processStream(
+    inputStream: Readable,
+    mimeType: string,
+    transform?: TransformDto,
+    output?: OutputDto,
+  ): Promise<StreamProcessResult> {
+    if (!mimeType.startsWith('image/')) {
+      throw new BadRequestException(`Invalid MIME type: ${mimeType}`);
+    }
+
+    const options = this.getSharpOptions(mimeType);
+    // failOnError: false allows processing of "corrupt" images that are mostly valid
+    let pipeline = sharp({ ...options, failOnError: false });
+
+    pipeline = this.applyTransformations(pipeline, transform);
+    pipeline = this.applyOutputFormat(pipeline, output);
+
+    // Pipe the input stream into the sharp pipeline
+    const resultStream = inputStream.pipe(pipeline);
+    
+    // Listen for pipeline errors to avoid unhandled stream errors
+    pipeline.on('error', (err) => {
+      this.logger.error({
+        msg: 'Sharp pipeline error',
+        error: err.message,
+        stack: err.stack,
+      });
+    });
+
+    const format = output?.format ?? this.defaults.format;
+
+    this.logger.log({
+      msg: 'Image stream processing started',
+      format,
+      mimeType,
+    });
+
+    return {
+      stream: resultStream,
+      mimeType: `image/${format}`,
+      extension: format,
+    };
   }
 
   /**

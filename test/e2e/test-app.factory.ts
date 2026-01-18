@@ -23,6 +23,14 @@ export async function createTestApp(): Promise<NestFastifyApplication> {
   const globalPrefix = basePath ? `${basePath}/api/v1` : 'api/v1';
   app.setGlobalPrefix(globalPrefix);
 
+  await app.register(import('@fastify/multipart'), {
+    limits: {
+      fileSize: 25 * 1024 * 1024, // 25MB default for tests
+      files: 1,
+      fieldSize: 1024 * 1024,
+    },
+  });
+
   await app.init();
   // Ensure Fastify has completed plugin registration and routing before tests
   await app.getHttpAdapter().getInstance().ready();

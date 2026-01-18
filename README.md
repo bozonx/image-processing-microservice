@@ -290,6 +290,53 @@ docker compose -f docker/docker-compose.yml up -d --build
 
 ---
 
+### POST /api/v1/process/stream
+
+Высокопроизводительный эндпоинт для потоковой обработки. Принимает `multipart/form-data` и возвращает результат в виде потока (stream), что позволяет обрабатывать файлы большого размера без значительного потребления памяти.
+
+**Параметры формы (multipart/form-data):**
+
+| Поле | Тип | Описание |
+| :--- | :--- | :--- |
+| `file` | `File` | **Обязательно.** Файл изображения (binary). |
+| `params` | `JSON string` | **Опционально.** Параметры обработки в формате JSON строки (аналогично `process` endpoint, но без поля `image` и `mimeType`). |
+
+**Пример `params`:**
+```json
+{
+  "output": { "format": "webp", "quality": 80 },
+  "transform": { "resize": { "width": 500 } }
+}
+```
+
+**Пример запроса (cURL):**
+```bash
+curl -X POST http://localhost:8080/api/v1/process/stream \
+  -F "file=@input.jpg" \
+  -F 'params={"output":{"format":"webp"}}' \
+  -o output.webp
+```
+
+---
+
+### POST /api/v1/exif/stream
+
+Потоковое извлечение метаданных. Принимает файл через `multipart/form-data`.
+
+**Параметры формы (multipart/form-data):**
+
+| Поле | Тип | Описание |
+| :--- | :--- | :--- |
+| `file` | `File` | **Обязательно.** Файл изображения (binary). |
+
+**Пример запроса (cURL):**
+```bash
+curl -X POST http://localhost:8080/api/v1/exif/stream \
+  -F "file=@photo.jpg"
+```
+
+---
+
 ### GET /api/v1/health
 
 Проверка состояния сервиса.
