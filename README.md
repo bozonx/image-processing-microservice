@@ -29,12 +29,13 @@
 
 ## Возможности
 
-- ✅ **Входные форматы**: JPEG, PNG, WebP, AVIF, GIF (включая анимированные), TIFF, BMP
+- ✅ **Входные форматы**: JPEG, PNG, WebP, AVIF, GIF (включая анимированные), TIFF, BMP, SVG
 - ✅ **Выходные форматы**: JPEG, PNG, WebP, AVIF, GIF (включая анимированные), TIFF
 - ✅ Извлечение EXIF метаданных
 - ✅ Изменение размера с различными режимами fit
 - ✅ Обрезка, поворот, отзеркаливание
 - ✅ Автоповорот на основе EXIF (autoOrient)
+- ✅ **Водяные знаки** (графические, включая SVG) с режимами single и tile
 - ✅ Управление очередью задач с приоритетами
 - ✅ Graceful shutdown
 
@@ -186,6 +187,23 @@ docker compose -f docker/docker-compose.yml up -d --build
 | `flip` | `boolean` | Отзеркалить по вертикали. |
 | `flop` | `boolean` | Отзеркалить по горизонтали. |
 | `backgroundColor` | `string` | Цвет фона для удаления прозрачности. |
+| `watermark` | `object` | Настройки водяного знака. Поля: `position`, `opacity`, `scale`, `mode`, `spacing`. |
+
+#### Объект `watermark` (Водяной знак):
+
+**Важно**: При использовании водяного знака необходимо загрузить файл водяного знака в поле `watermark` формы.
+
+| Поле | Тип | Описание |
+| :--- | :--- | :--- |
+| `position` | `string` | Позиция водяного знака: `northwest`, `north`, `northeast`, `west`, `center`, `east`, `southwest`, `south`, `southeast`. По умолчанию: `southeast`. Игнорируется в режиме `tile`. |
+| `opacity` | `number` | Прозрачность водяного знака (0-1). По умолчанию: `1.0`. |
+| `scale` | `number` | Размер водяного знака в процентах от меньшей стороны изображения (1-100). По умолчанию: `10`. |
+| `mode` | `string` | Режим наложения: `single` (одиночный) или `tile` (повторяющийся). По умолчанию: `single`. |
+| `spacing` | `number` | Отступ между повторениями в режиме `tile` (в пикселях). По умолчанию: `0`. |
+
+**Поддерживаемые форматы водяных знаков**: PNG, SVG, WebP, AVIF (рекомендуется PNG или SVG с прозрачностью).
+
+**Важно для SVG**: Текст в SVG должен быть преобразован в кривые (paths), иначе могут возникнуть проблемы с отображением шрифтов.
 
 #### Объект `output` (Вывод):
 
@@ -540,6 +558,20 @@ curl -X POST http://localhost:8080/api/v1/process \
 curl -X POST http://localhost:8080/api/v1/exif \
   -F "file=@photo.jpg"
 
+# Наложение водяного знака (PNG логотип)
+curl -X POST http://localhost:8080/api/v1/process \
+  -F "file=@photo.jpg" \
+  -F "watermark=@logo.png" \
+  -F 'params={"transform":{"watermark":{"position":"southeast","opacity":0.8,"scale":15}},"output":{"format":"jpeg","quality":90}}' \
+  -o watermarked.jpg
+
+# Водяной знак в режиме tile (повторяющийся)
+curl -X POST http://localhost:8080/api/v1/process \
+  -F "file=@photo.jpg" \
+  -F "watermark=@pattern.png" \
+  -F 'params={"transform":{"watermark":{"mode":"tile","scale":8,"opacity":0.3,"spacing":50}},"output":{"format":"jpeg","quality":90}}' \
+  -o tiled-watermark.jpg
+
 # Health check
 curl http://localhost:8080/api/v1/health
 ```
@@ -713,11 +745,11 @@ await writeFile('output.avif', result.buffer);
 
 ## Roadmap
 
-### v1.1 (Фаза 2) - Планируется
+### ✅ v1.1 (Фаза 2) - Частично завершен
+- [x] **Водяные знаки (watermarks)** - графические водяные знаки с режимами single и tile
 - [ ] Опциональная поддержка BMP на запись (требует доп. библиотек)
 - [ ] Опциональная поддержка JPEG XL (требует кастомной сборки libvips)
 - [ ] Умная обрезка (Smart Crop) с использованием entropy/attention
-- [ ] Водяные знаки (watermarks)
 - [ ] Поддержка ICC профилей
 
 ### v1.2 (Фаза 3)

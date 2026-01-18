@@ -47,54 +47,69 @@ export class ImageProcessingController {
       throw new BadRequestException('Invalid content type, expected multipart/form-data');
     }
 
-    const data = await req.file();
-    if (!data) {
-      throw new BadRequestException('No file uploaded');
-    }
-
-    // Parse params from form field (default to empty object if not provided)
+    // Process multiple files (main file and optional watermark)
+    const parts = req.files();
+    let mainFileData: { buffer: Buffer; mimetype: string } | null = null;
+    let watermarkFileData: { buffer: Buffer; mimetype: string } | null = null;
     let dto = new ProcessImageDto();
-    const paramsField = data.fields['params'];
-    
-    const paramValue = 
-      paramsField && 
-      !Array.isArray(paramsField) && 
-      paramsField.type === 'field' 
-        ? (paramsField as any).value 
-        : undefined;
 
-    if (paramValue) {
-      try {
-        const parsed = JSON.parse(paramValue as string);
-        dto = plainToInstance(ProcessImageDto, parsed);
-        const errors = await validate(dto);
-        if (errors.length > 0) {
-          throw new BadRequestException(errors.toString());
+    for await (const part of parts) {
+      if (part.type === 'file') {
+        // Buffer the file in memory
+        const chunks: Buffer[] = [];
+        for await (const chunk of part.file) {
+          chunks.push(chunk);
         }
-      } catch (e) {
-        throw new BadRequestException('Invalid params format');
+        const buffer = Buffer.concat(chunks);
+
+        if (part.fieldname === 'file') {
+          mainFileData = { buffer, mimetype: part.mimetype };
+        } else if (part.fieldname === 'watermark') {
+          watermarkFileData = { buffer, mimetype: part.mimetype };
+        }
+      } else if (part.type === 'field' && part.fieldname === 'params') {
+        // Parse params from form field
+        try {
+          // For field type, we need to read the value
+          const fieldValue = await part.toBuffer();
+          const parsed = JSON.parse(fieldValue.toString('utf-8'));
+          dto = plainToInstance(ProcessImageDto, parsed);
+          const errors = await validate(dto);
+          if (errors.length > 0) {
+            throw new BadRequestException(errors.toString());
+          }
+        } catch (e) {
+          throw new BadRequestException('Invalid params format');
+        }
       }
     }
 
-    // Buffer the file in memory to provide backpressure and release Fastify's resources early
-    const chunks: Buffer[] = [];
-    for await (const chunk of data.file) {
-      chunks.push(chunk);
+    if (!mainFileData) {
+      throw new BadRequestException('No file uploaded');
     }
-    const buffer = Buffer.concat(chunks);
+
+    // Validate watermark: if watermark config is provided, watermark file is required
+    if (dto.transform?.watermark && !watermarkFileData) {
+      throw new BadRequestException('Watermark file is required when watermark config is provided');
+    }
+
     const priority = dto.priority ?? 2;
 
     // Use queue to process the image and hold the slot until the response is finished
     await this.queueService.add(async () => {
       const result = await this.imageProcessor.processStream(
-        Readable.from(buffer),
-        data.mimetype,
+        Readable.from(mainFileData.buffer),
+        mainFileData.mimetype,
         dto.transform,
         dto.output,
+        watermarkFileData ? {
+          buffer: watermarkFileData.buffer,
+          mimetype: watermarkFileData.mimetype,
+        } : undefined,
       );
 
       res.type(result.mimeType);
-      res.header('Content-Disposition', `inline; filename="processed.${result.extension}"`);
+      res.header('Content-Disposition', `inline; filename=\"processed.${result.extension}\"`);
       
       // Pipe the sharp output to the response
       res.send(result.stream);

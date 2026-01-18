@@ -106,7 +106,40 @@ export class TransformDto {
   @IsOptional()
   @IsBoolean()
   public removeAlpha?: boolean;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => WatermarkDto)
+  public watermark?: WatermarkDto;
 }
+
+export class WatermarkDto {
+  @IsOptional()
+  @IsEnum(['northwest', 'north', 'northeast', 'west', 'center', 'east', 'southwest', 'south', 'southeast'])
+  public position?: 'northwest' | 'north' | 'northeast' | 'west' | 'center' | 'east' | 'southwest' | 'south' | 'southeast';
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(1)
+  public opacity?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(1)
+  @Max(100)
+  public scale?: number;
+
+  @IsOptional()
+  @IsEnum(['single', 'tile'])
+  public mode?: 'single' | 'tile';
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  public spacing?: number;
+}
+
 
 export class OutputDto {
   @IsOptional()

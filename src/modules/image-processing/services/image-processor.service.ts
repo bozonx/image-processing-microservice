@@ -37,6 +37,7 @@ export class ImageProcessorService {
    * @param mimeType - The MIME type of the input image.
    * @param transform - Transformation settings.
    * @param output - Output format settings.
+   * @param watermark - Optional watermark file data.
    * @returns An object containing the processed image stream and metadata.
    */
   public async processStream(
@@ -44,6 +45,7 @@ export class ImageProcessorService {
     mimeType: string,
     transform?: TransformDto,
     output?: OutputDto,
+    watermark?: { buffer: Buffer; mimetype: string },
   ): Promise<StreamProcessResult> {
     if (!mimeType.startsWith('image/')) {
       throw new BadRequestException(`Invalid MIME type: ${mimeType}`);
@@ -54,10 +56,24 @@ export class ImageProcessorService {
     let pipeline = sharp({ ...options, failOnError: false });
 
     pipeline = this.applyTransformations(pipeline, transform);
+    
+    // Apply watermark if provided
+    if (watermark && transform?.watermark) {
+      // We need to get metadata first, so we'll buffer the input
+      const inputBuffer = await this.streamToBuffer(inputStream);
+      pipeline = sharp(inputBuffer, { ...options, failOnError: false });
+      pipeline = this.applyTransformations(pipeline, transform);
+      
+      const metadata = await pipeline.metadata();
+      await this.applyWatermark(pipeline, watermark.buffer, transform.watermark, metadata);
+    }
+    
     pipeline = this.applyOutputFormat(pipeline, output);
 
-    // Pipe the input stream into the sharp pipeline
-    const resultStream = inputStream.pipe(pipeline);
+    // Pipe the input stream into the sharp pipeline (if not buffered for watermark)
+    const resultStream = watermark && transform?.watermark 
+      ? pipeline 
+      : inputStream.pipe(pipeline);
     
     // Listen for pipeline errors to avoid unhandled stream errors
     pipeline.on('error', (err) => {
@@ -74,6 +90,7 @@ export class ImageProcessorService {
       msg: 'Image stream processing started',
       format,
       mimeType,
+      hasWatermark: !!(watermark && transform?.watermark),
     });
 
     const isRaw = format === 'raw';
@@ -226,5 +243,181 @@ export class ImageProcessorService {
       default:
         throw new BadRequestException(`Unsupported format: ${format}`);
     }
+  }
+
+  /**
+   * Converts a Readable stream to a Buffer.
+   *
+   * @param stream - The input stream.
+   * @returns A promise that resolves to a Buffer.
+   */
+  private async streamToBuffer(stream: Readable): Promise<Buffer> {
+    const chunks: Buffer[] = [];
+    for await (const chunk of stream) {
+      chunks.push(chunk);
+    }
+    return Buffer.concat(chunks);
+  }
+
+  /**
+   * Applies watermark to the image pipeline.
+   *
+   * @param pipeline - The current sharp instance.
+   * @param watermarkBuffer - Buffer containing the watermark image.
+   * @param watermarkConfig - Watermark configuration.
+   * @param metadata - Metadata of the main image.
+   */
+  private async applyWatermark(
+    pipeline: sharp.Sharp,
+    watermarkBuffer: Buffer,
+    watermarkConfig: import('../dto/process-image.dto.js').WatermarkDto,
+    metadata: sharp.Metadata,
+  ): Promise<void> {
+    const { width = 0, height = 0 } = metadata;
+
+    if (watermarkConfig.mode === 'tile') {
+      // Режим tile: покрытие всей плоскости
+      const composites = await this.createTiledWatermark(
+        watermarkBuffer,
+        watermarkConfig,
+        width,
+        height,
+      );
+      pipeline.composite(composites);
+    } else {
+      // Режим single: одиночный водяной знак
+      const composite = await this.createSingleWatermark(
+        watermarkBuffer,
+        watermarkConfig,
+        width,
+        height,
+      );
+      pipeline.composite([composite]);
+    }
+  }
+
+  /**
+   * Creates a single watermark overlay.
+   *
+   * @param watermarkBuffer - Buffer containing the watermark image.
+   * @param config - Watermark configuration.
+   * @param imageWidth - Width of the main image.
+   * @param imageHeight - Height of the main image.
+   * @returns Sharp overlay options.
+   */
+  private async createSingleWatermark(
+    watermarkBuffer: Buffer,
+    config: import('../dto/process-image.dto.js').WatermarkDto,
+    imageWidth: number,
+    imageHeight: number,
+  ): Promise<sharp.OverlayOptions> {
+    // Масштабирование водяного знака
+    const scaledWatermark = await this.scaleWatermark(
+      watermarkBuffer,
+      config.scale ?? 10,
+      imageWidth,
+      imageHeight,
+      config.opacity,
+    );
+
+    return {
+      input: scaledWatermark,
+      gravity: (config.position ?? 'southeast') as any,
+    };
+  }
+
+  /**
+   * Creates tiled watermark overlays.
+   *
+   * @param watermarkBuffer - Buffer containing the watermark image.
+   * @param config - Watermark configuration.
+   * @param imageWidth - Width of the main image.
+   * @param imageHeight - Height of the main image.
+   * @returns Array of Sharp overlay options.
+   */
+  private async createTiledWatermark(
+    watermarkBuffer: Buffer,
+    config: import('../dto/process-image.dto.js').WatermarkDto,
+    imageWidth: number,
+    imageHeight: number,
+  ): Promise<sharp.OverlayOptions[]> {
+    // Масштабирование водяного знака
+    const scaledWatermark = await this.scaleWatermark(
+      watermarkBuffer,
+      config.scale ?? 10,
+      imageWidth,
+      imageHeight,
+      config.opacity,
+    );
+
+    // Получить размеры масштабированного водяного знака
+    const wmMetadata = await sharp(scaledWatermark).metadata();
+    const wmWidth = wmMetadata.width ?? 0;
+    const wmHeight = wmMetadata.height ?? 0;
+    const spacing = config.spacing ?? 0;
+
+    // Рассчитать количество повторений
+    const cols = Math.ceil(imageWidth / (wmWidth + spacing));
+    const rows = Math.ceil(imageHeight / (wmHeight + spacing));
+
+    // Создать массив композитов
+    const composites: sharp.OverlayOptions[] = [];
+    for (let row = 0; row < rows; row++) {
+      for (let col = 0; col < cols; col++) {
+        composites.push({
+          input: scaledWatermark,
+          top: row * (wmHeight + spacing),
+          left: col * (wmWidth + spacing),
+        });
+      }
+    }
+
+    return composites;
+  }
+
+  /**
+   * Scales and optionally adjusts opacity of the watermark.
+   *
+   * @param watermarkBuffer - Buffer containing the watermark image.
+   * @param scalePercent - Scale percentage relative to the smaller dimension of the main image.
+   * @param imageWidth - Width of the main image.
+   * @param imageHeight - Height of the main image.
+   * @param opacity - Optional opacity (0-1).
+   * @returns Scaled watermark buffer.
+   */
+  private async scaleWatermark(
+    watermarkBuffer: Buffer,
+    scalePercent: number,
+    imageWidth: number,
+    imageHeight: number,
+    opacity?: number,
+  ): Promise<Buffer> {
+    const targetSize = Math.min(imageWidth, imageHeight) * (scalePercent / 100);
+
+    let pipeline = sharp(watermarkBuffer).resize({
+      width: Math.round(targetSize),
+      height: Math.round(targetSize),
+      fit: 'inside',
+      withoutEnlargement: true,
+    });
+
+    // Apply opacity if specified
+    if (opacity !== undefined && opacity < 1) {
+      // Ensure the image has an alpha channel and composite with opacity
+      pipeline = pipeline.ensureAlpha().composite([
+        {
+          input: Buffer.from([255, 255, 255, Math.round(opacity * 255)]),
+          raw: {
+            width: 1,
+            height: 1,
+            channels: 4,
+          },
+          tile: true,
+          blend: 'dest-in',
+        },
+      ]);
+    }
+
+    return pipeline.toBuffer();
   }
 }
