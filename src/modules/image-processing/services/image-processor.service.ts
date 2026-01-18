@@ -150,7 +150,7 @@ export class ImageProcessorService {
         });
       } else if (resize.width || resize.height) {
         pipeline = pipeline.resize(resize.width, resize.height, {
-          fit: resize.fit ?? 'inside',
+          fit: resize.fit ?? 'cover',
           withoutEnlargement: resize.withoutEnlargement ?? true,
           position: resize.position as any,
         });
