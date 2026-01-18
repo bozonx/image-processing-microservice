@@ -3,7 +3,6 @@ import { ConfigService } from '@nestjs/config';
 import sharp from 'sharp';
 import { Readable } from 'node:stream';
 import {
-  ProcessImageDto,
   TransformDto,
   OutputDto,
   WatermarkDto,
@@ -276,7 +275,7 @@ export class ImageProcessorService {
     const { width = 0, height = 0 } = metadata;
 
     if (watermarkConfig.mode === 'tile') {
-      // Режим tile: покрытие всей плоскости
+      // "Tile" mode: cover the entire area
       const composites = await this.createTiledWatermark(
         watermarkBuffer,
         watermarkConfig,
@@ -285,7 +284,7 @@ export class ImageProcessorService {
       );
       pipeline.composite(composites);
     } else {
-      // Режим single: одиночный водяной знак
+      // "Single" mode: single watermark
       const composite = await this.createSingleWatermark(
         watermarkBuffer,
         watermarkConfig,
@@ -311,7 +310,7 @@ export class ImageProcessorService {
     imageWidth: number,
     imageHeight: number,
   ): Promise<sharp.OverlayOptions> {
-    // Масштабирование водяного знака
+    // Watermark scaling
     const scaledWatermark = await this.scaleWatermark(
       watermarkBuffer,
       config.scale ?? 10,
@@ -341,7 +340,7 @@ export class ImageProcessorService {
     imageWidth: number,
     imageHeight: number,
   ): Promise<sharp.OverlayOptions[]> {
-    // Масштабирование водяного знака
+    // Watermark scaling
     const scaledWatermark = await this.scaleWatermark(
       watermarkBuffer,
       config.scale ?? 10,
@@ -350,17 +349,17 @@ export class ImageProcessorService {
       config.opacity,
     );
 
-    // Получить размеры масштабированного водяного знака
+    // Get scaled watermark dimensions
     const wmMetadata = await sharp(scaledWatermark).metadata();
     const wmWidth = wmMetadata.width ?? 0;
     const wmHeight = wmMetadata.height ?? 0;
     const spacing = config.spacing ?? 0;
 
-    // Рассчитать количество повторений
+    // Calculate the number of repetitions
     const cols = Math.ceil(imageWidth / (wmWidth + spacing));
     const rows = Math.ceil(imageHeight / (wmHeight + spacing));
 
-    // Создать массив композитов
+    // Create composites array
     const composites: sharp.OverlayOptions[] = [];
     for (let row = 0; row < rows; row++) {
       for (let col = 0; col < cols; col++) {
