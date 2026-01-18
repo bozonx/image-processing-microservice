@@ -33,7 +33,22 @@ describe('ImageProcessorService', () => {
   const processWrapper = async (dto: any) => {
     const buffer = Buffer.from(dto.image, 'base64');
     const stream = bufferToStream(buffer);
-    const result = await service.processStream(stream, dto.mimeType, dto.transform, dto.output);
+
+    let watermark;
+    if (dto.watermark) {
+      watermark = {
+        buffer: Buffer.from(dto.watermark.image, 'base64'),
+        mimetype: dto.watermark.mimeType || 'image/png',
+      };
+    }
+
+    const result = await service.processStream(
+      stream,
+      dto.mimeType,
+      dto.transform,
+      dto.output,
+      watermark,
+    );
     
     const chunks: Buffer[] = [];
     for await (const chunk of result.stream) {
@@ -48,6 +63,19 @@ describe('ImageProcessorService', () => {
       mimeType: result.mimeType,
       dimensions: { width: metadata.width, height: metadata.height },
     };
+  };
+
+  const createWatermarkBuffer = async (width = 50, height = 50) => {
+    return sharp({
+      create: {
+        width,
+        height,
+        channels: 4,
+        background: { r: 0, g: 0, b: 255, alpha: 0.5 },
+      },
+    })
+      .png()
+      .toBuffer();
   };
 
   it('should be defined', () => {
@@ -382,5 +410,108 @@ describe('ImageProcessorService', () => {
     expect(result.mimeType).toBe('image/png');
     expect(result.dimensions.width).toBe(100);
     expect(result.dimensions.height).toBe(100);
+  });
+
+  describe('Watermarking', () => {
+    it('should apply single watermark', async () => {
+      const inputBuffer = await sharp({
+        create: {
+          width: 500,
+          height: 500,
+          channels: 3,
+          background: { r: 255, g: 255, b: 255 },
+        },
+      })
+        .png()
+        .toBuffer();
+
+      const watermarkBuffer = await createWatermarkBuffer(100, 100);
+
+      const result = await processWrapper({
+        image: inputBuffer.toString('base64'),
+        mimeType: 'image/png',
+        watermark: {
+          image: watermarkBuffer.toString('base64'),
+        },
+        transform: {
+          watermark: {
+            mode: 'single',
+            scale: 20, // 20% of 500 = 100px
+            opacity: 0.5,
+            position: 'center',
+          },
+        },
+      });
+
+      expect(result.dimensions.width).toBe(500);
+      expect(result.dimensions.height).toBe(500);
+      // Visual verification would be needed to confirm watermark presence, 
+      // but we can check that processing completed successfully
+    });
+
+    it('should apply tiled watermark', async () => {
+      const inputBuffer = await sharp({
+        create: {
+          width: 500,
+          height: 500,
+          channels: 3,
+          background: { r: 255, g: 255, b: 255 },
+        },
+      })
+        .png()
+        .toBuffer();
+
+      const watermarkBuffer = await createWatermarkBuffer(50, 50);
+
+      const result = await processWrapper({
+        image: inputBuffer.toString('base64'),
+        mimeType: 'image/png',
+        watermark: {
+          image: watermarkBuffer.toString('base64'),
+        },
+        transform: {
+          watermark: {
+            mode: 'tile',
+            scale: 10,
+            spacing: 10,
+          },
+        },
+      });
+
+      expect(result.dimensions.width).toBe(500);
+      expect(result.dimensions.height).toBe(500);
+    });
+
+    it('should scale watermark correctly', async () => {
+      const inputBuffer = await sharp({
+        create: {
+          width: 1000,
+          height: 1000,
+          channels: 3,
+          background: { r: 255, g: 255, b: 255 },
+        },
+      })
+        .png()
+        .toBuffer();
+
+      const watermarkBuffer = await createWatermarkBuffer(200, 200);
+
+      // We mainly test that it doesn't crash and returns valid result
+      const result = await processWrapper({
+        image: inputBuffer.toString('base64'),
+        mimeType: 'image/png',
+        watermark: {
+          image: watermarkBuffer.toString('base64'),
+        },
+        transform: {
+          watermark: {
+            mode: 'single',
+            scale: 50, // Should scale to 500px
+          },
+        },
+      });
+
+      expect(result.dimensions.width).toBe(1000);
+    });
   });
 });

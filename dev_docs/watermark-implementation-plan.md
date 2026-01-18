@@ -250,9 +250,9 @@ private async scaleWatermark(
 - [ ] Добавить обработку ошибок
 
 ### Этап 4: Тестирование
-- [ ] Unit тесты для `applyWatermark()`
-- [ ] Unit тесты для режима `single`
-- [ ] Unit тесты для режима `tile`
+- [x] Unit тесты для `applyWatermark()`
+- [x] Unit тесты для режима `single`
+- [x] Unit тесты для режима `tile`
 - [ ] E2E тесты с PNG водяным знаком
 - [ ] E2E тесты с SVG водяным знаком
 - [ ] Тесты для edge cases (отсутствие файла, невалидные параметры)
