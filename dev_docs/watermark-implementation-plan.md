@@ -81,7 +81,7 @@ export class WatermarkDto {
   @IsNumber()
   @Min(1)
   @Max(100)
-  scale?: number; // процент от размера основного изображения, default: 10
+  scale?: number; // процент от размера основного изображения (по меньшей стороне), default: 10. Не превышает исходный размер водяного знака.
 
   @IsOptional()
   @IsEnum(['single', 'tile'])

@@ -1,15 +1,18 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Image Processing Microservice - Test UI</title>
-    <meta name="description" content="Test interface for image processing microservice with support for resize, crop, rotate, and format conversion">
+    <meta name="description"
+        content="Test interface for image processing microservice with support for resize, crop, rotate, and format conversion">
     <link rel="stylesheet" href="/styles.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 </head>
+
 <body>
     <div class="container">
         <header class="header">
@@ -47,7 +50,7 @@
                         <p class="upload-hint">Supported: WebP, AVIF, JPEG, PNG, GIF, TIFF, BMP</p>
                     </div>
                 </div>
-                
+
                 <div class="preview-container" id="previewContainer" style="display: none;">
                     <div class="preview-header">
                         <h3>Original Image</h3>
@@ -79,7 +82,7 @@
 
                 <div class="control-group">
                     <h3 class="control-title">Transformations</h3>
-                    
+
                     <div class="checkbox-group">
                         <label class="checkbox-label">
                             <input type="checkbox" id="autoOrient" checked>
@@ -214,15 +217,17 @@
                         </button>
                         <div class="accordion-content">
                             <div class="watermark-upload-area" id="watermarkUploadArea">
-                                <input type="file" id="watermarkInput" accept="image/png,image/svg+xml,image/webp,image/avif" hidden>
+                                <input type="file" id="watermarkInput"
+                                    accept="image/png,image/svg+xml,image/webp,image/avif" hidden>
                                 <div class="watermark-upload-content">
                                     <div class="watermark-upload-icon">💧</div>
                                     <p class="watermark-upload-text">Click to upload watermark</p>
                                     <p class="watermark-upload-hint">PNG, SVG, WebP, AVIF</p>
                                 </div>
                             </div>
-                            
-                            <div class="watermark-preview-container" id="watermarkPreviewContainer" style="display: none;">
+
+                            <div class="watermark-preview-container" id="watermarkPreviewContainer"
+                                style="display: none;">
                                 <div class="watermark-preview-header">
                                     <span id="watermarkFileName">watermark.png</span>
                                     <button class="btn-icon-small" id="clearWatermarkBtn" type="button">✕</button>
@@ -255,7 +260,8 @@
 
                             <div class="form-field">
                                 <label>Opacity (0.0-1.0)</label>
-                                <input type="number" id="watermarkOpacity" min="0" max="1" step="0.1" value="1.0" placeholder="1.0">
+                                <input type="number" id="watermarkOpacity" min="0" max="1" step="0.1" value="1.0"
+                                    placeholder="1.0">
                             </div>
 
                             <div class="form-field">
@@ -269,7 +275,9 @@
                             </div>
 
                             <div class="watermark-info">
-                                <p><strong>Note:</strong> For SVG watermarks, ensure text is converted to paths.</p>
+                                <p><strong>Note:</strong> Scale is relative to the main image, but the watermark will
+                                    not exceed its original size to preserve quality. For SVG watermarks, ensure text is
+                                    converted to paths.</p>
                             </div>
                         </div>
                     </div>
@@ -277,7 +285,7 @@
 
                 <div class="control-group">
                     <h3 class="control-title">Output Format</h3>
-                    
+
                     <div class="form-field">
                         <label>Format</label>
                         <select id="outputFormat">
@@ -390,7 +398,7 @@
                         <p class="upload-hint">Upload image to extract EXIF metadata</p>
                     </div>
                 </div>
-                
+
                 <div class="preview-container" id="exifPreviewContainer" style="display: none;">
                     <div class="preview-header">
                         <h3>Image</h3>
@@ -444,4 +452,5 @@
 
     <script src="/app.js"></script>
 </body>
+
 </html>
