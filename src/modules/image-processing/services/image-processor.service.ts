@@ -5,13 +5,6 @@ import { Readable } from 'node:stream';
 import { ProcessImageDto, TransformDto, OutputDto } from '../dto/process-image.dto.js';
 import type { ImageDefaults, ImageConfig } from '../../../config/image.config.js';
 
-interface ProcessResult {
-  buffer: Buffer;
-  size: number;
-  mimeType: string;
-  dimensions: { width: number; height: number };
-  stats?: { beforeBytes: number; afterBytes: number; reductionPercent: number };
-}
 
 interface StreamProcessResult {
   stream: Readable;
@@ -35,73 +28,6 @@ export class ImageProcessorService {
     this.defaults = config.defaults;
   }
 
-  /**
-   * Processes an image based on the provided DTO.
-   *
-   * @param dto - Data Transfer Object containing base64 image, mimeType, and desired transformations/output settings.
-   * @returns An object containing the processed buffer, dimensions, mimeType, and optimization stats.
-   * @throws BadRequestException if the image is invalid or exceeds the size limit.
-   */
-  public async process(dto: ProcessImageDto): Promise<ProcessResult> {
-    const inputBuffer = this.validateImage(dto.image, dto.mimeType);
-    const startTime = Date.now();
-    const beforeBytes = inputBuffer.length;
-
-    try {
-      const options = this.getSharpOptions(dto.mimeType);
-      let pipeline = sharp(inputBuffer, options);
-
-      pipeline = this.applyTransformations(pipeline, dto.transform);
-      pipeline = this.applyOutputFormat(pipeline, dto.output);
-
-      const resultBuffer = await pipeline.toBuffer({ resolveWithObject: true });
-      const afterBytes = resultBuffer.data.length;
-      const duration = Date.now() - startTime;
-
-      // Ensure we have correct format name for response
-      const outputFormat = dto.output?.format ?? this.defaults.format ?? resultBuffer.info.format;
-
-      const stats = {
-        beforeBytes,
-        afterBytes,
-        reductionPercent: Number(((1 - afterBytes / beforeBytes) * 100).toFixed(1)),
-      };
-
-      this.logger.log({
-        msg: 'Image processed',
-        duration,
-        ...stats,
-        format: outputFormat,
-        quality: dto.output?.quality ?? this.defaults.quality,
-        dimensions: {
-          width: resultBuffer.info.width,
-          height: resultBuffer.info.height,
-        },
-      });
-
-      return {
-        buffer: resultBuffer.data,
-        size: afterBytes,
-        mimeType: `image/${outputFormat}`,
-        dimensions: {
-          width: resultBuffer.info.width,
-          height: resultBuffer.info.height,
-        },
-        stats,
-      };
-    } catch (error) {
-      const duration = Date.now() - startTime;
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-
-      this.logger.error({
-        msg: 'Image processing failed',
-        duration,
-        error: errorMessage,
-      });
-
-      throw error;
-    }
-  }
 
   /**
    * Processes an image stream based on the provided parameters.
@@ -157,28 +83,6 @@ export class ImageProcessorService {
     };
   }
 
-  /**
-   * Validates the input image base64 and MIME type.
-   *
-   * @param base64Image - The image data in base64 format.
-   * @param mimeType - The MIME type of the input image.
-   * @returns The decoded Buffer of the image.
-   * @throws BadRequestException if validation fails.
-   */
-  private validateImage(base64Image: string, mimeType: string): Buffer {
-    if (!mimeType.startsWith('image/')) {
-      throw new BadRequestException(`Invalid MIME type: ${mimeType}`);
-    }
-
-    const buffer = Buffer.from(base64Image, 'base64');
-    if (buffer.length > this.maxBytes) {
-      throw new BadRequestException(
-        `Image size ${buffer.length} bytes exceeds maximum ${this.maxBytes} bytes`,
-      );
-    }
-
-    return buffer;
-  }
 
   /**
    * Returns specific sharp options based on MIME type (e.g., enabling animation for GIFs).

@@ -18,27 +18,38 @@ export class ExifService {
   }
 
   /**
-   * Extracts EXIF metadata from an image buffer.
+   * Extracts EXIF metadata from an image stream.
+   * Note: This method buffers the entire stream into memory because exifr requires a buffer.
    *
-   * @param buffer - The image data as a Buffer.
+   * @param stream - The image data stream.
    * @param mimeType - The MIME type of the image.
    * @returns A record of EXIF data or null if extraction fails or no data is found.
-   * @throws Error if the image size exceeds the limit.
    */
-  public async extract(buffer: Buffer, mimeType: string): Promise<Record<string, any> | null> {
-    // Check size
-    if (buffer.length > this.maxBytes) {
-      throw new Error(`Image size ${buffer.length} bytes exceeds maximum ${this.maxBytes} bytes`);
-    }
-
-    // Check MIME type
-    if (!mimeType.startsWith('image/')) {
-      throw new Error(`Invalid MIME type: ${mimeType}`);
-    }
-
+  public async extract(
+    stream: Readable,
+    mimeType: string,
+  ): Promise<Record<string, any> | null> {
     const startTime = Date.now();
 
     try {
+      const chunks: Buffer[] = [];
+      let totalLength = 0;
+
+      for await (const chunk of stream) {
+        totalLength += chunk.length;
+        if (totalLength > this.maxBytes) {
+          throw new Error(`Image size exceeds maximum ${this.maxBytes} bytes`);
+        }
+        chunks.push(Buffer.from(chunk));
+      }
+
+      const buffer = Buffer.concat(chunks);
+
+      // Check MIME type
+      if (!mimeType.startsWith('image/')) {
+        throw new Error(`Invalid MIME type: ${mimeType}`);
+      }
+
       // parse() returns data or undefined if nothing found
       const exifData = await exifr.parse(buffer, {
         translateKeys: true,
@@ -68,26 +79,5 @@ export class ExifService {
 
       return null;
     }
-  }
-
-  /**
-   * Extracts EXIF metadata from an image stream.
-   * Note: This method buffers the entire stream into memory because exifr requires a buffer.
-   *
-   * @param stream - The image data stream.
-   * @param mimeType - The MIME type of the image.
-   * @returns A record of EXIF data or null.
-   */
-  public async extractFromStream(
-    stream: Readable,
-    mimeType: string,
-  ): Promise<Record<string, any> | null> {
-    const chunks: Buffer[] = [];
-    for await (const chunk of stream) {
-      chunks.push(Buffer.from(chunk));
-    }
-    const buffer = Buffer.concat(chunks);
-
-    return this.extract(buffer, mimeType);
   }
 }

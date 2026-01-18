@@ -168,12 +168,6 @@ export class OutputDto {
 }
 
 export class ProcessImageDto {
-  @IsString()
-  public image!: string; // base64
-
-  @IsString()
-  public mimeType!: string;
-
   @IsOptional()
   @IsNumber()
   @Min(0)

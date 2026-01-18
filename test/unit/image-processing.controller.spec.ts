@@ -1,5 +1,6 @@
 import { jest, describe, it, expect, beforeEach } from '@jest/globals';
 import { Test, type TestingModule } from '@nestjs/testing';
+import { BadRequestException } from '@nestjs/common';
 import { ImageProcessingController } from '../../src/modules/image-processing/image-processing.controller.js';
 import { ImageProcessorService } from '../../src/modules/image-processing/services/image-processor.service.js';
 import { ExifService } from '../../src/modules/image-processing/services/exif.service.js';
@@ -18,7 +19,7 @@ describe('ImageProcessingController', () => {
         {
           provide: ImageProcessorService,
           useValue: {
-            process: jest.fn(),
+            processStream: jest.fn(),
           },
         },
         {
@@ -43,45 +44,70 @@ describe('ImageProcessingController', () => {
     queueService = module.get<QueueService>(QueueService);
   });
 
+  const mockFile = (fields = {}) => ({
+    file: 'mock-stream',
+    mimetype: 'image/jpeg',
+    fields,
+  });
+
+  const mockReq = (fileData: any) => ({
+    file: jest.fn().mockResolvedValue(fileData),
+  });
+
+  const mockRes = () => ({
+    type: jest.fn().mockReturnThis(),
+    header: jest.fn().mockReturnThis(),
+    send: jest.fn().mockReturnThis(),
+  });
+
   it('should be defined', () => {
     expect(controller).toBeDefined();
   });
 
   describe('process', () => {
-    it('should call imageProcessor.process and return result', async () => {
-      const dto = { image: 'base64', mimeType: 'image/jpeg' };
+    it('should call imageProcessor.processStream and return stream', async () => {
+      const file = mockFile();
+      const req = mockReq(file);
+      const res = mockRes();
       const processedResult = {
-        buffer: Buffer.from('result'),
-        size: 6,
+        stream: 'processed-stream',
         mimeType: 'image/webp',
-        dimensions: { width: 100, height: 100 },
-        stats: { beforeBytes: 10, afterBytes: 6, reductionPercent: 40 },
+        extension: 'webp',
       };
 
-      jest.spyOn(imageProcessor, 'process').mockResolvedValue(processedResult);
+      jest.spyOn(imageProcessor, 'processStream').mockResolvedValue(processedResult as any);
 
-      const result = await controller.process(dto as any);
+      await controller.process(req as any, res as any);
 
       expect(queueService.add).toHaveBeenCalled();
-      expect(imageProcessor.process).toHaveBeenCalledWith(dto);
-      expect(result).toEqual({
-        ...processedResult,
-        buffer: processedResult.buffer.toString('base64'),
-      });
+      expect(imageProcessor.processStream).toHaveBeenCalledWith(
+        file.file,
+        file.mimetype,
+        undefined,
+        undefined,
+      );
+      expect(res.type).toHaveBeenCalledWith('image/webp');
+      expect(res.send).toHaveBeenCalledWith('processed-stream');
+    });
+
+    it('should throw BadRequestException if no file', async () => {
+      const req = mockReq(null);
+      await expect(controller.process(req as any, {} as any)).rejects.toThrow(BadRequestException);
     });
   });
 
   describe('extractExif', () => {
     it('should call exifService.extract and return result', async () => {
-      const dto = { image: 'base64', mimeType: 'image/jpeg' };
+      const file = mockFile();
+      const req = mockReq(file);
       const exifData = { Make: 'Canon' };
 
       jest.spyOn(exifService, 'extract').mockResolvedValue(exifData);
 
-      const result = await controller.extractExif(dto as any);
+      const result = await controller.extractExif(req as any);
 
       expect(queueService.add).toHaveBeenCalled();
-      expect(exifService.extract).toHaveBeenCalled();
+      expect(exifService.extract).toHaveBeenCalledWith(file.file, file.mimetype);
       expect(result).toEqual({ exif: exifData });
     });
   });

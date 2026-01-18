@@ -15,7 +15,7 @@ describe('Image Processing (e2e)', () => {
   });
 
   describe('POST /api/v1/process', () => {
-    it('should process a valid image', async () => {
+    it('should process a valid image stream', async () => {
       const inputBuffer = await sharp({
         create: {
           width: 100,
@@ -27,43 +27,43 @@ describe('Image Processing (e2e)', () => {
         .jpeg()
         .toBuffer();
 
+      const boundary = '--------------------------testboundary';
+      const crlf = '\r\n';
+      
+      const params = JSON.stringify({
+         output: { format: 'webp', quality: 80 }
+      });
+
+      const header1 = Buffer.from(
+        `--${boundary}${crlf}Content-Disposition: form-data; name="params"${crlf}${crlf}${params}${crlf}` +
+        `--${boundary}${crlf}Content-Disposition: form-data; name="file"; filename="test.jpg"${crlf}Content-Type: image/jpeg${crlf}${crlf}`
+      );
+      const footer = Buffer.from(`${crlf}--${boundary}--${crlf}`);
+      
+      const payload = Buffer.concat([header1, inputBuffer, footer]);
+
       const response = await app.inject({
         method: 'POST',
         url: '/api/v1/process',
-        payload: {
-          image: inputBuffer.toString('base64'),
-          mimeType: 'image/jpeg',
-          output: {
-            format: 'webp',
-            quality: 80,
-          },
+        headers: {
+          'Content-Type': `multipart/form-data; boundary=${boundary}`,
         },
+        payload: payload,
       });
 
       expect(response.statusCode).toBe(200);
-      const body = JSON.parse(response.body);
-      expect(body).toHaveProperty('buffer');
-      expect(body).toHaveProperty('mimeType', 'image/webp');
-      expect(body.dimensions.width).toBe(100);
-      expect(body.dimensions.height).toBe(100);
-    });
-
-    it('should return 400 for invalid request body', async () => {
-      const response = await app.inject({
-        method: 'POST',
-        url: '/api/v1/process',
-        payload: {
-          image: 'not_an_image',
-          // missing mimeType
-        },
-      });
-
-      expect(response.statusCode).toBe(400);
+      expect(response.headers['content-type']).toBe('image/webp');
+      
+      // Verify the response is a valid image
+      const metadata = await sharp(response.rawPayload).metadata();
+      expect(metadata.format).toBe('webp');
+      expect(metadata.width).toBe(100);
+      expect(metadata.height).toBe(100);
     });
   });
 
   describe('POST /api/v1/exif', () => {
-    it('should extract metadata from a valid image', async () => {
+    it('should extract metadata from an image stream', async () => {
       const inputBuffer = await sharp({
         create: {
           width: 100,
@@ -75,13 +75,23 @@ describe('Image Processing (e2e)', () => {
         .jpeg()
         .toBuffer();
 
+      const boundary = '--------------------------testboundary';
+      const crlf = '\r\n';
+      
+      const header = Buffer.from(
+        `--${boundary}${crlf}Content-Disposition: form-data; name="file"; filename="test.jpg"${crlf}Content-Type: image/jpeg${crlf}${crlf}`
+      );
+      const footer = Buffer.from(`${crlf}--${boundary}--${crlf}`);
+      
+      const payload = Buffer.concat([header, inputBuffer, footer]);
+
       const response = await app.inject({
         method: 'POST',
         url: '/api/v1/exif',
-        payload: {
-          image: inputBuffer.toString('base64'),
-          mimeType: 'image/jpeg',
+         headers: {
+          'Content-Type': `multipart/form-data; boundary=${boundary}`,
         },
+        payload: payload,
       });
 
       expect(response.statusCode).toBe(200);

@@ -177,29 +177,28 @@ function clearProcessForm() {
 }
 
 async function processImage() {
-  if (!currentBase64 || !currentMimeType) {
+  if (!currentFile) {
     showToast('Please upload an image first', 'error');
     return;
   }
 
+  const formData = new FormData();
+  formData.append('file', currentFile);
+
   const priority = parseInt(document.querySelector('input[name="priority"]:checked').value);
-  const requestBody = {
-    image: currentBase64,
-    mimeType: currentMimeType,
+  const params = {
     priority,
     transform: buildTransformObject(),
     output: buildOutputObject()
   };
+  formData.append('params', JSON.stringify(params));
 
   showLoading(true);
 
   try {
     const response = await fetch(`${API_BASE}/process`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(requestBody)
+      body: formData
     });
 
     if (!response.ok) {
@@ -207,8 +206,9 @@ async function processImage() {
       throw new Error(error.message || 'Processing failed');
     }
 
-    const result = await response.json();
-    displayProcessResult(result);
+    const blob = await response.blob();
+    const mimeType = response.headers.get('Content-Type');
+    displayProcessResult(blob, mimeType);
     showToast('Image processed successfully!', 'success');
   } catch (error) {
     showToast(error.message || 'Failed to process image', 'error');
@@ -325,69 +325,67 @@ function buildOutputObject() {
   return output;
 }
 
-function displayProcessResult(result) {
+function displayProcessResult(blob, mimeType) {
   const resultsSection = document.getElementById('resultsSection');
   const resultImage = document.getElementById('resultImage');
   const statsGrid = document.getElementById('statsGrid');
 
-  // Display image
-  resultImage.src = `data:${result.mimeType};base64,${result.buffer}`;
+  // Create Object URL for the blob
+  const url = URL.createObjectURL(blob);
+  resultImage.src = url;
 
-  // Display stats
-  const stats = [
-    {
-      label: 'Format',
-      value: result.mimeType.replace('image/', '').toUpperCase()
-    },
-    {
-      label: 'Dimensions',
-      value: `${result.dimensions.width} × ${result.dimensions.height}px`
-    },
-    {
-      label: 'File Size',
-      value: formatBytes(result.size)
-    },
-    {
-      label: 'Original Size',
-      value: formatBytes(result.stats.beforeBytes)
-    },
-    {
-      label: 'Size Reduction',
-      value: `${result.stats.reductionPercent.toFixed(1)}%`,
-      success: result.stats.reductionPercent > 0
-    }
-  ];
+  // Get image dimensions
+  const img = new Image();
+  img.onload = () => {
+    const stats = [
+      {
+        label: 'Format',
+        value: mimeType.replace('image/', '').toUpperCase()
+      },
+      {
+        label: 'Dimensions',
+        value: `${img.width} × ${img.height}px`
+      },
+      {
+        label: 'File Size',
+        value: formatBytes(blob.size)
+      },
+      {
+        label: 'Original Size',
+        value: formatBytes(currentFile.size)
+      },
+      {
+        label: 'Size Reduction',
+        value: `${((1 - blob.size / currentFile.size) * 100).toFixed(1)}%`,
+        success: blob.size < currentFile.size
+      }
+    ];
 
-  statsGrid.innerHTML = stats.map(stat => `
-        <div class="stat-card">
-            <div class="stat-label">${stat.label}</div>
-            <div class="stat-value ${stat.success ? 'success' : ''}">${stat.value}</div>
-        </div>
-    `).join('');
+    statsGrid.innerHTML = stats.map(stat => `
+          <div class="stat-card">
+              <div class="stat-label">${stat.label}</div>
+              <div class="stat-value ${stat.success ? 'success' : ''}">${stat.value}</div>
+          </div>
+      `).join('');
+  };
+  img.src = url;
 
   // Show results
   document.getElementById('controlsSection').style.display = 'none';
   resultsSection.style.display = 'block';
 
   // Store result for download
-  window.processedResult = result;
+  window.processedBlob = blob;
+  window.processedMimeType = mimeType;
 }
 
 function downloadResult() {
-  if (!window.processedResult) return;
+  if (!window.processedBlob) return;
 
-  const result = window.processedResult;
-  const extension = result.mimeType.split('/')[1];
+  const blob = window.processedBlob;
+  const mimeType = window.processedMimeType;
+  const extension = mimeType.split('/')[1];
   const filename = `processed-${Date.now()}.${extension}`;
-
-  // Convert base64 to blob
-  const byteCharacters = atob(result.buffer);
-  const byteNumbers = new Array(byteCharacters.length);
-  for (let i = 0; i < byteCharacters.length; i++) {
-    byteNumbers[i] = byteCharacters.charCodeAt(i);
-  }
-  const byteArray = new Uint8Array(byteNumbers);
-  const blob = new Blob([byteArray], { type: result.mimeType });
 
   // Download
   const url = URL.createObjectURL(blob);
@@ -397,7 +395,8 @@ function downloadResult() {
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+  // We don't revoke here because it might be still needed for display
+  // But strictly speaking, we should manage it better
 
   showToast('Image downloaded!', 'success');
 }
@@ -484,27 +483,24 @@ function clearExifForm() {
 }
 
 async function extractExif() {
-  if (!exifBase64 || !exifMimeType) {
+  if (!exifFile) {
     showToast('Please upload an image first', 'error');
     return;
   }
 
+  const formData = new FormData();
+  formData.append('file', exifFile);
+
   const priority = parseInt(document.querySelector('input[name="exifPriority"]:checked').value);
-  const requestBody = {
-    image: exifBase64,
-    mimeType: exifMimeType,
-    priority
-  };
+  const params = { priority };
+  formData.append('params', JSON.stringify(params));
 
   showLoading(true);
 
   try {
     const response = await fetch(`${API_BASE}/exif`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(requestBody)
+      body: formData
     });
 
     if (!response.ok) {

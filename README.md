@@ -158,17 +158,22 @@ docker compose -f docker/docker-compose.yml up -d --build
 
 ### POST /api/v1/process
 
-Основной эндпоинт для обработки изображений. Позволяет изменять размер, обрезать, поворачивать и конвертировать изображения в различные форматы.
+Основной эндпоинт для обработки изображений. Использует потоковую передачу данных через `multipart/form-data`, что позволяет эффективно обрабатывать файлы любого размера.
 
-**Параметры запроса (JSON):**
+**Параметры запроса (multipart/form-data):**
 
-| Параметр | Тип | Описание |
+| Поле | Тип | Описание |
 | :--- | :--- | :--- |
-| `image` | `string` | **Обязательно.** Изображение в формате Base64. |
-| `mimeType` | `string` | **Обязательно.** MIME-тип входного изображения (например, `image/jpeg`). |
+| `file` | `File` | **Обязательно.** Файл изображения (binary). |
+| `params` | `JSON string` | **Опционально.** Параметры обработки в формате JSON (см. ниже). |
+
+#### Параметры `params` (JSON):
+
+| Поле | Тип | Описание |
+| :--- | :--- | :--- |
 | `priority` | `number` | Приоритет задачи: `0` (высокий), `1` (средний), `2` (низкий). По умолчанию: `2`. |
-| `transform` | `object` | Параметры трансформации (см. ниже). |
-| `output` | `object` | Параметры выходного формата (см. ниже). |
+| `transform` | `object` | Параметры трансформации (resize, crop, rotate и т.д.). |
+| `output` | `object` | Параметры выходного формата (format, quality и т.д.). |
 
 #### Объект `transform` (Трансформации):
 
@@ -176,102 +181,45 @@ docker compose -f docker/docker-compose.yml up -d --build
 | :--- | :--- | :--- |
 | `resize` | `object` | Изменение размера. Поля: `width`, `height`, `maxDimension`, `fit`, `withoutEnlargement`, `position`. |
 | `crop` | `object` | Обрезка. Поля: `left`, `top`, `width`, `height`. |
-| `autoOrient` | `boolean` | Автоматический поворот и отзеркаливание на основе EXIF данных. Выполняется **до** остальных трансформаций. Если включено, сбрасывает тег ориентации EXIF. Если выключено — EXIF данные игнорируются. |
-| `rotate` | `number` | Явный поворот на угол в градусах (-360 до 360). Применяется **после** `autoOrient`. |
-| `flip` | `boolean` | Отзеркалить по вертикали. Применяется **после** `autoOrient`. |
-| `flop` | `boolean` | Отзеркалить по горизонтали. Применяется **после** `autoOrient`. |
-| `backgroundColor` | `string` | Цвет фона (hex, name). Используется для удаления прозрачности (наложения на фон). |
-
-**Детали `resize`:**
-- `maxDimension` (number): Ограничение большей стороны (пропорции сохраняются). Нельзя использовать вместе с `width`/`height`.
-- `width` / `height` (number): Явное указание размеров.
-- `fit` (string): Режим вписывания:
-  - `cover`: Сохраняет пропорции, обрезает лишнее, чтобы заполнить указанные размеры.
-  - `contain`: Сохраняет пропорции, вписывает изображение целиком, добавляя пустые поля ("letterboxing") если нужно.
-  - `fill`: Игнорирует пропорции, растягивает изображение точно под указанные размеры.
-  - `inside`: (по умолчанию) Сохраняет пропорции, делает изображение максимально большим, чтобы оно не выходило за границы.
-  - `outside`: Сохраняет пропорции, делает изображение максимально маленьким, чтобы оно полностью закрывало границы.
-- `withoutEnlargement` (boolean): Не увеличивать изображение, если оно меньше целевых размеров. По умолчанию: `true`.
-- `position` (string): Точка привязки для `cover` или `contain`:
-  - Направления: `center` (по умолчанию), `top`, `right`, `bottom`, `left`, `right top`, `right bottom`, `left bottom`, `left top`.
-  - Стратегии обрезки: `entropy` (по фокусу на детализации), `attention` (по наиболее значимой области).
-
-**Детали `crop`:**
-- `left`, `top`, `width`, `height` (number): Координаты и размеры области обрезки.
+| `autoOrient` | `boolean` | Автоматический поворот на основе EXIF. По умолчанию: `true`. |
+| `rotate` | `number` | Явный поворот на угол (-360 до 360). |
+| `flip` | `boolean` | Отзеркалить по вертикали. |
+| `flop` | `boolean` | Отзеркалить по горизонтали. |
+| `backgroundColor` | `string` | Цвет фона для удаления прозрачности. |
 
 #### Объект `output` (Вывод):
-
-> **Важно:** Если объект `output` не передан, будут применены настройки по умолчанию из конфигурации сервера (обычно конвертация в `WebP` с качеством `80`), даже если параметры трансформации (resize, rotate и т.д.) были указаны. Чтобы сохранить исходный формат, необходимо явно передать его в поле `format`.
 
 | Поле | Тип | Описание |
 | :--- | :--- | :--- |
 | `format` | `string` | Выходной формат: `webp`, `avif`, `jpeg`, `png`, `gif`, `tiff`. |
 | `quality` | `number` | Качество сжатия (1-100). |
-| `lossless` | `boolean` | Использовать ли сжатие без потерь (для WebP/AVIF). |
-| `stripMetadata` | `boolean` | Удалить метаданные (EXIF и др.). |
-| `effort` | `number` | Уровень усилий при сжатии (0-9). Чем выше, тем медленнее, но файл меньше. |
-| `progressive` | `boolean` | Использовать прогрессивную развертку (для JPEG). |
-| `mozjpeg` | `boolean` | Использовать библиотеку mozjpeg для лучшего сжатия (для JPEG). |
-| `compressionLevel` | `number` | Уровень сжатия (0-9) для PNG. Чем выше, тем медленнее, но файл меньше. |
-| `chromaSubsampling` | `string` | Цветовая субдискретизация для AVIF и JPEG (например, `4:2:0`, `4:4:4`). |
-| `palette` | `boolean` | Использовать квантование палитры (аналог pngquant) для PNG. Включается автоматически, если задан `quality`. |
-| `colors` | `number` | Максимальное количество цветов в палитре (2-256) для PNG. |
-| `dither` | `number` | Уровень диффузии ошибок Floyd-Steinberg (0.0 - 1.0) для PNG. |
-| `adaptiveFiltering` | `boolean` | Использовать адаптивную фильтрацию строк для PNG. |
+| `stripMetadata` | `boolean` | Удалить метаданные. |
+| `lossless` | `boolean` | Сжатие без потерь (для WebP/AVIF). |
+| `effort` | `number` | Уровень усилий при сжатии (0-9). |
 
-**Пример запроса:**
-```json
-{
-  "image": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
-  "mimeType": "image/png",
-  "priority": 1,
-  "transform": {
-    "resize": {
-      "width": 800,
-      "height": 600,
-      "fit": "cover"
-    },
-    "autoOrient": true
-  },
-  "output": {
-    "format": "webp",
-    "quality": 85,
-    "stripMetadata": true
-  }
-}
+**Пример запроса (cURL):**
+```bash
+curl -X POST http://localhost:8080/api/v1/process \
+  -F "file=@image.jpg" \
+  -F 'params={"output":{"format":"webp","quality":85},"transform":{"resize":{"width":800}}}' \
+  -o processed.webp
 ```
 
 **Ответ:**
-```json
-{
-  "buffer": "...", // Результирующее изображение в Base64
-  "size": 42560,
-  "mimeType": "image/webp",
-  "dimensions": {
-    "width": 800,
-    "height": 600
-  },
-  "stats": {
-    "beforeBytes": 125000,
-    "afterBytes": 42560,
-    "reductionPercent": 65.95
-  }
-}
-```
+Бинарный поток данных обработанного изображения с соответствующим `Content-Type`.
 
 ---
 
 ### POST /api/v1/exif
 
-Извлечение метаданных EXIF без обработки самого изображения.
+Извлечение метаданных EXIF. Принимает файл через `multipart/form-data`.
 
-**Параметры запроса (JSON):**
+**Параметры запроса (multipart/form-data):**
 
-| Параметр | Тип | Описание |
+| Поле | Тип | Описание |
 | :--- | :--- | :--- |
-| `image` | `string` | **Обязательно.** Изображение в формате Base64. |
-| `mimeType` | `string` | **Обязательно.** MIME-тип входного изображения (например, `image/jpeg`). |
-| `priority` | `number` | Приоритет задачи: `0` (высокий), `1` (средний), `2` (низкий). |
+| `file` | `File` | **Обязательно.** Файл изображения (binary). |
+| `params` | `JSON string` | **Опционально.** Параметры (например, `priority`). |
 
 **Ответ:**
 ```json
@@ -280,60 +228,19 @@ docker compose -f docker/docker-compose.yml up -d --build
     "Make": "Canon",
     "Model": "EOS 5D Mark IV",
     "DateTimeOriginal": "2024:01:15 14:30:00",
-    "ExposureTime": 0.004,
-    "FNumber": 2.8,
-    "ISO": 400,
     "Orientation": 1
   }
 }
 ```
 
----
-
-### POST /api/v1/process/stream
-
-Высокопроизводительный эндпоинт для потоковой обработки. Принимает `multipart/form-data` и возвращает результат в виде потока (stream), что позволяет обрабатывать файлы большого размера без значительного потребления памяти.
-
-**Параметры формы (multipart/form-data):**
-
-| Поле | Тип | Описание |
-| :--- | :--- | :--- |
-| `file` | `File` | **Обязательно.** Файл изображения (binary). |
-| `params` | `JSON string` | **Опционально.** Параметры обработки в формате JSON строки (аналогично `process` endpoint, но без поля `image` и `mimeType`). |
-
-**Пример `params`:**
-```json
-{
-  "output": { "format": "webp", "quality": 80 },
-  "transform": { "resize": { "width": 500 } }
-}
-```
-
 **Пример запроса (cURL):**
 ```bash
-curl -X POST http://localhost:8080/api/v1/process/stream \
-  -F "file=@input.jpg" \
-  -F 'params={"output":{"format":"webp"}}' \
-  -o output.webp
-```
-
----
-
-### POST /api/v1/exif/stream
-
-Потоковое извлечение метаданных. Принимает файл через `multipart/form-data`.
-
-**Параметры формы (multipart/form-data):**
-
-| Поле | Тип | Описание |
-| :--- | :--- | :--- |
-| `file` | `File` | **Обязательно.** Файл изображения (binary). |
-
-**Пример запроса (cURL):**
-```bash
-curl -X POST http://localhost:8080/api/v1/exif/stream \
+curl -X POST http://localhost:8080/api/v1/exif \
   -F "file=@photo.jpg"
 ```
+
+---
+
 
 ---
 
@@ -625,33 +532,13 @@ curl http://localhost:8080/api/v1/health
 ```bash
 # Обработка изображения с изменением размера и конвертацией в WebP
 curl -X POST http://localhost:8080/api/v1/process \
-  -H "Content-Type: application/json" \
-  -d '{
-    "image": "'$(base64 -w 0 input.jpg)'",
-    "mimeType": "image/jpeg",
-    "priority": 1,
-    "transform": {
-      "resize": {
-        "width": 800,
-        "height": 600,
-        "fit": "cover"
-      },
-      "autoOrient": true
-    },
-    "output": {
-      "format": "webp",
-      "quality": 85,
-      "stripMetadata": true
-    }
-  }'
+  -F "file=@input.jpg" \
+  -F 'params={"output":{"format":"webp","quality":85},"transform":{"resize":{"width":800}}}' \
+  -o output.webp
 
 # Извлечение EXIF метаданных
 curl -X POST http://localhost:8080/api/v1/exif \
-  -H "Content-Type: application/json" \
-  -d '{
-    "image": "'$(base64 -w 0 photo.jpg)'",
-    "mimeType": "image/jpeg"
-  }'
+  -F "file=@photo.jpg"
 
 # Health check
 curl http://localhost:8080/api/v1/health
@@ -660,111 +547,52 @@ curl http://localhost:8080/api/v1/health
 ### Пример с fetch (Node.js)
 
 ```typescript
-import { readFile, writeFile } from 'fs/promises';
-
 async function processImage() {
-  // Читаем изображение
-  const imageBuffer = await readFile('input.jpg');
+  const formData = new FormData();
   
-  // Отправляем на обработку
+  // Добавляем файл
+  const file = new Blob([await (await fetch('file://input.jpg')).arrayBuffer()]);
+  formData.append('file', file, 'input.jpg');
+  
+  // Добавляем параметры
+  formData.append('params', JSON.stringify({
+    output: { format: 'webp', quality: 85 },
+    transform: { resize: { width: 800 } }
+  }));
+
   const response = await fetch('http://localhost:8080/api/v1/process', {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      image: imageBuffer.toString('base64'),
-      mimeType: 'image/jpeg',
-      priority: 1,
-      transform: {
-        resize: {
-          maxDimension: 1920,
-          fit: 'inside',
-          withoutEnlargement: true,
-        },
-        autoOrient: true,
-      },
-      output: {
-        format: 'webp',
-        quality: 85,
-        effort: 6,
-        stripMetadata: true,
-      },
-    }),
+    body: formData
   });
 
-  if (!response.ok) {
-    throw new Error(`HTTP error! status: ${response.status}`);
+  if (response.ok) {
+    const buffer = await response.arrayBuffer();
+    // Сохранить buffer...
   }
-
-  const result = await response.json();
-  
-  // Сохраняем результат
-  const processedImage = Buffer.from(result.buffer, 'base64');
-  await writeFile('output.webp', processedImage);
-  
-  console.log('Image processed successfully!');
-  console.log(`Original size: ${result.stats.beforeBytes} bytes`);
-  console.log(`Processed size: ${result.stats.afterBytes} bytes`);
-  console.log(`Reduction: ${result.stats.reductionPercent}%`);
-  console.log(`Dimensions: ${result.dimensions.width}x${result.dimensions.height}`);
 }
-
-processImage().catch(console.error);
 ```
 
 ### Пример с Python
 
 ```python
-import base64
 import requests
-import json
 
-def process_image(input_path: str, output_path: str):
-    # Читаем изображение и кодируем в base64
-    with open(input_path, 'rb') as f:
-        image_data = base64.b64encode(f.read()).decode('utf-8')
+def process_image(input_path, output_path):
+    url = "http://localhost:8080/api/v1/process"
     
-    # Подготавливаем запрос
-    payload = {
-        'image': image_data,
-        'mimeType': 'image/jpeg',
-        'priority': 1,
-        'transform': {
-            'resize': {
-                'width': 800,
-                'height': 600,
-                'fit': 'cover'
-            },
-            'autoOrient': True
-        },
-        'output': {
-            'format': 'webp',
-            'quality': 85,
-            'stripMetadata': True
-        }
+    files = {
+        'file': open(input_path, 'rb'),
     }
     
-    # Отправляем запрос
-    response = requests.post(
-        'http://localhost:8080/api/v1/process',
-        json=payload,
-        headers={'Content-Type': 'application/json'}
-    )
+    data = {
+        'params': '{"output": {"format": "webp", "quality": 85}}'
+    }
     
-    response.raise_for_status()
-    result = response.json()
+    response = requests.post(url, files=files, data=data)
     
-    # Сохраняем результат
-    processed_data = base64.b64decode(result['buffer'])
-    with open(output_path, 'wb') as f:
-        f.write(processed_data)
-    
-    print(f"Image processed successfully!")
-    print(f"Original size: {result['stats']['beforeBytes']} bytes")
-    print(f"Processed size: {result['stats']['afterBytes']} bytes")
-    print(f"Reduction: {result['stats']['reductionPercent']}%")
-    print(f"Dimensions: {result['dimensions']['width']}x{result['dimensions']['height']}")
+    if response.status_code == 200:
+        with open(output_path, 'wb') as f:
+            f.write(response.content)
 
 if __name__ == '__main__':
     process_image('input.jpg', 'output.webp')
