@@ -436,7 +436,8 @@ describe('ImageProcessorService', () => {
         transform: {
           watermark: {
             mode: 'single',
-            scale: 20, // 20% of 500 = 100px
+            // 20% of 500 = 100px
+            scale: 20,
             opacity: 0.5,
             position: 'center',
           },
@@ -506,7 +507,8 @@ describe('ImageProcessorService', () => {
         transform: {
           watermark: {
             mode: 'single',
-            scale: 50, // Should scale to 500px
+            // Should scale to 500px
+            scale: 50,
           },
         },
       });

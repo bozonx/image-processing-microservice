@@ -34,7 +34,8 @@ async function bootstrap() {
   const app = await NestFactory.create<NestFastifyApplication>(
     AppModule,
     new FastifyAdapter({
-      logger: false, // We'll use Pino logger instead
+      // We'll use Pino logger instead
+      logger: false,
       bodyLimit: bodyLimitBytes,
       forceCloseConnections: true,
       closeTimeout: appConfig.shutdownTimeout,
@@ -61,8 +62,10 @@ async function bootstrap() {
   await app.register(import('@fastify/multipart'), {
     limits: {
       fileSize: imageConfig.maxBytes,
-      files: 2, // Allow up to 2 files (main image and watermark)
-      fieldSize: 10 * 1024 * 1024, // 10MB limit for JSON fields (params)
+      // Allow up to 2 files (main image and watermark)
+      files: 2,
+      // 10MB limit for JSON fields (params)
+      fieldSize: 10 * 1024 * 1024,
     },
   });
 

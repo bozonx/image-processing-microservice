@@ -1,6 +1,6 @@
 services:
   image-processing:
-    image: bozonx/image-processing-microservice
+    image: ghcr.io/bozonx/image-processing-microservice:latest
     container_name: image-processing-microservice
     hostname: image-processing-microservice
     restart: unless-stopped

@@ -75,15 +75,18 @@ describe('Watermark (e2e)', () => {
 
   describe('POST /api/v1/process with Watermark', () => {
     it('should apply a single watermark at the default position (southeast)', async () => {
-      const mainImage = await createTestImage(500, 500, { r: 255, g: 255, b: 255 }); // White background
-      const watermark = await createTestImage(100, 100, { r: 0, g: 0, b: 255 }); // Blue square
+      // White background
+      const mainImage = await createTestImage(500, 500, { r: 255, g: 255, b: 255 });
+      // Blue square
+      const watermark = await createTestImage(100, 100, { r: 0, g: 0, b: 255 });
 
       const boundary = '--------------------------watermarktest';
       const params = {
         transform: {
           watermark: {
             mode: 'single',
-            scale: 20, // 20% of 500 = 100px
+            // 20% of 500 = 100px
+            scale: 20,
             opacity: 1,
             position: 'southeast',
           },
@@ -113,14 +116,16 @@ describe('Watermark (e2e)', () => {
 
     it('should apply tiled watermark across the image', async () => {
       const mainImage = await createTestImage(200, 200, { r: 255, g: 255, b: 255 });
-      const watermark = await createTestImage(20, 20, { r: 255, g: 0, b: 0 }); // Red square
+      // Red square
+      const watermark = await createTestImage(20, 20, { r: 255, g: 0, b: 0 });
 
       const boundary = '--------------------------watermarktest';
       const params = {
         transform: {
           watermark: {
             mode: 'tile',
-            scale: 10, // 10% of 200 = 20px
+            // 10% of 200 = 20px
+            scale: 10,
             opacity: 0.5,
             spacing: 10,
           },
@@ -147,7 +152,8 @@ describe('Watermark (e2e)', () => {
     });
 
     it('should apply SVG watermark', async () => {
-      const mainImage = await createTestImage(200, 200, { r: 0, g: 0, b: 0 }); // Black background
+      // Black background
+      const mainImage = await createTestImage(200, 200, { r: 0, g: 0, b: 0 });
       const svgWatermark = Buffer.from(
         '<svg width="100" height="100"><rect width="100" height="100" fill="white"/></svg>',
       );

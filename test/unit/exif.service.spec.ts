@@ -71,7 +71,8 @@ describe('ExifService', () => {
   });
 
   it('should throw error for oversized image', async () => {
-    const largeBuffer = Buffer.allocUnsafe(30 * 1024 * 1024); // 30MB
+    // 30MB
+    const largeBuffer = Buffer.allocUnsafe(30 * 1024 * 1024);
 
     await expect(service.extract(bufferToStream(largeBuffer), 'image/jpeg')).resolves.toBeNull();
     // Note: service.extract catches errors and returns null, except for size/mime which we moved inside
