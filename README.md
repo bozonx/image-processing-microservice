@@ -319,10 +319,10 @@ docker compose -f docker/docker-compose.yml up -d --build
 - `LOG_LEVEL` - Уровень логирования: `trace`, `debug`, `info`, `warn`, `error` (default: info)
 - `TZ` - Временная зона (default: UTC)
 - `FILE_MAX_BYTES_MB` - Максимальный размер входного файла в MB (default: 25)
-- `HEAVY_TASKS_MAX_CONCURRENCY` - Количество параллельных задач обработки (default: 4)
-- `HEAVY_TASKS_QUEUE_TIMEOUT_MS` - Таймаут ожидания задачи в очереди в мс (default: 30000)
-- `HEAVY_TASKS_REQUEST_TIMEOUT_MS` - Таймаут выполнения запроса в мс (default: 60000)
-- `SHUTDOWN_TIMEOUT_MS` - Таймаут graceful shutdown в мс (default: 30000)
+- `MAX_CONCURRENCY` - Количество параллельных задач обработки (default: 4)
+- `QUEUE_TIMEOUT_SECONDS` - Таймаут ожидания задачи в очереди в секундах (default: 30)
+- `REQUEST_TIMEOUT_SECONDS` - Таймаут выполнения запроса в секундах (default: 60)
+- `SHUTDOWN_TIMEOUT_SECONDS` - Таймаут graceful shutdown в секундах (default: 30)
 
 ## Тестирование
 
@@ -397,15 +397,15 @@ src/
 - Управление очередью задач с приоритетами (0-2)
 - Ограничение конкурентности (default: 4 задачи)
 - Таймауты на уровне задачи (30s) и запроса (60s)
-- Graceful shutdown с ожиданием завершения задач
+- Graceful shutdown с ожиданием завершения задач (30s)
 - Мониторинг размера очереди и активных задач
 
 ### Очередь Задач
 
 Сервис использует `p-queue` для управления параллельными задачами:
 - **Приоритеты**: 0 (высокий), 1 (средний), 2 (низкий)
-- **Таймаут на задачу**: 30 секунд (настраивается через `HEAVY_TASKS_QUEUE_TIMEOUT_MS`)
-- **Таймаут запроса**: 60 секунд (настраивается через `HEAVY_TASKS_REQUEST_TIMEOUT_MS`)
+- **Таймаут на задачу**: 30 секунд (настраивается через `QUEUE_TIMEOUT_SECONDS`)
+- **Таймаут запроса**: 60 секунд (настраивается через `REQUEST_TIMEOUT_SECONDS`)
 - **Graceful shutdown**: ожидание завершения текущих задач при остановке сервиса
 - **Мониторинг**: доступ к размеру очереди и количеству активных задач через `/health`
 
@@ -433,22 +433,22 @@ src/
 #### Минимальные Требования
 - CPU: 2 ядра
 - Memory: 2GB RAM
-- `HEAVY_TASKS_MAX_CONCURRENCY=2`
+- `MAX_CONCURRENCY=2`
 
 #### Рекомендуемые Требования
 - CPU: 4 ядра
 - Memory: 4GB RAM
-- `HEAVY_TASKS_MAX_CONCURRENCY=4`
+- `MAX_CONCURRENCY=4`
 
 #### Высокая Нагрузка
 - CPU: 8+ ядер
 - Memory: 8GB+ RAM
-- `HEAVY_TASKS_MAX_CONCURRENCY=8`
+- `MAX_CONCURRENCY=8`
 
 ### Оптимизация
 
 **Общие рекомендации:**
-- Устанавливайте `HEAVY_TASKS_MAX_CONCURRENCY` равным количеству CPU ядер
+- Устанавливайте `MAX_CONCURRENCY` равным количеству CPU ядер
 - Для AVIF используйте `effort=4-6` (баланс скорость/качество)
 - Для WebP используйте `effort=4` для быстрой обработки
 - Включайте `stripMetadata=true` для уменьшения размера файлов
@@ -543,7 +543,7 @@ A: Логи выводятся в stdout в JSON формате (Pino). В devel
 **Q: Как работает graceful shutdown?**  
 A: При получении сигнала SIGTERM/SIGINT сервис:
 1. Прекращает принимать новые запросы
-2. Ждёт завершения текущих задач в очереди (до `SHUTDOWN_TIMEOUT_MS`)
+2. Ждёт завершения текущих задач в очереди (до `SHUTDOWN_TIMEOUT_SECONDS`)
 3. Корректно закрывает все соединения
 4. Завершает работу
 

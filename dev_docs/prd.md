@@ -290,8 +290,8 @@ Health check endpoint.
 ### 3.2 Управление Очередью Задач
 
 #### 3.2.1 Конфигурация Очереди
-- **Параллелизм**: Настраивается через `HEAVY_TASKS_MAX_CONCURRENCY` (по умолчанию: 4)
-- **Таймаут**: Настраивается через `HEAVY_TASKS_QUEUE_TIMEOUT_MS` (по умолчанию: 30000ms)
+- **Параллелизм**: Настраивается через `MAX_CONCURRENCY` (по умолчанию: 4)
+- **Таймаут**: Настраивается через `QUEUE_TIMEOUT_SECONDS` (по умолчанию: 30s)
 - **Уровни Приоритета**:
   - `0` (Наивысший): Критические задачи
   - `1-9` (Средний): Обычные задачи
@@ -321,7 +321,7 @@ Health check endpoint.
 - Размеры превышают максимально допустимые
 
 #### 3.3.3 Ошибки Таймаута (408)
-- Обработка превышает `HEAVY_TASKS_QUEUE_TIMEOUT_MS`
+- Обработка превышает `QUEUE_TIMEOUT_SECONDS` (время ожидания в очереди) или `REQUEST_TIMEOUT_SECONDS` (общее время)
 
 #### 3.3.4 Ошибки Обработки (500)
 - Сбои обработки Sharp
@@ -370,7 +370,7 @@ Health check endpoint.
 - Нет общего состояния между инстансами
 
 #### 4.2.2 Вертикальное Масштабирование
-- `HEAVY_TASKS_MAX_CONCURRENCY` должен соответствовать количеству CPU ядер
+- `MAX_CONCURRENCY` должен соответствовать количеству CPU ядер
 - Память масштабируется как `FILE_MAX_BYTES_MB` × `CONCURRENCY`
 
 ---
@@ -450,8 +450,9 @@ TZ=UTC                                # Часовой пояс
 
 # Лимиты Обработки
 FILE_MAX_BYTES_MB=25                 # Максимальный размер изображения в MB
-HEAVY_TASKS_MAX_CONCURRENCY=4         # Параллельные задачи обработки
-HEAVY_TASKS_QUEUE_TIMEOUT_MS=30000    # Таймаут задачи в миллисекундах
+MAX_CONCURRENCY=4         # Параллельные задачи обработки
+QUEUE_TIMEOUT_SECONDS=30          # Таймаут очереди в секундах
+REQUEST_TIMEOUT_SECONDS=60        # Таймаут запроса в секундах
 
 # Настройки по Умолчанию для Обработки
 IMAGE_DEFAULT_FORMAT=webp             # webp | avif | jpeg | png | gif | tiff
@@ -473,7 +474,7 @@ IMAGE_JPEG_MOZJPEG=false              # Использовать mozjpeg
 IMAGE_PNG_COMPRESSION_LEVEL=6         # 0-9
 
 # Shutdown
-SHUTDOWN_TIMEOUT_MS=30000             # Таймаут graceful shutdown
+SHUTDOWN_TIMEOUT_SECONDS=30             # Таймаут graceful shutdown в секундах
 ```
 
 ---
@@ -628,7 +629,7 @@ SHUTDOWN_TIMEOUT_MS=30000             # Таймаут graceful shutdown
 
 #### 8.2.3 Рекомендации по Масштабированию
 - 1 инстанс на 4 CPU ядра
-- `HEAVY_TASKS_MAX_CONCURRENCY` = количество CPU ядер
+- `MAX_CONCURRENCY` = количество CPU ядер
 - Memory = 1GB + (FILE_MAX_BYTES_MB × CONCURRENCY × 2)
 
 ---

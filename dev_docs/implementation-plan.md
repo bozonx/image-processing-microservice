@@ -158,8 +158,9 @@ TZ=UTC
 
 # Лимиты Обработки
 FILE_MAX_BYTES_MB=25
-HEAVY_TASKS_MAX_CONCURRENCY=2
-HEAVY_TASKS_QUEUE_TIMEOUT_MS=30000
+FILE_MAX_BYTES_MB=25
+MAX_CONCURRENCY=2
+QUEUE_TIMEOUT_SECONDS=30
 
 # Настройки по Умолчанию для Обработки
 IMAGE_DEFAULT_FORMAT=webp
@@ -181,7 +182,7 @@ IMAGE_JPEG_MOZJPEG=false
 IMAGE_PNG_COMPRESSION_LEVEL=6
 
 # Shutdown
-SHUTDOWN_TIMEOUT_MS=30000
+SHUTDOWN_TIMEOUT_SECONDS=30
 ```
 
 #### .env.production.example
@@ -196,8 +197,8 @@ TZ=UTC
 
 # Лимиты Обработки
 FILE_MAX_BYTES_MB=25
-HEAVY_TASKS_MAX_CONCURRENCY=4
-HEAVY_TASKS_QUEUE_TIMEOUT_MS=30000
+MAX_CONCURRENCY=4
+QUEUE_TIMEOUT_SECONDS=30
 
 # Настройки по Умолчанию для Обработки
 IMAGE_DEFAULT_FORMAT=webp
@@ -219,7 +220,7 @@ IMAGE_JPEG_MOZJPEG=false
 IMAGE_PNG_COMPRESSION_LEVEL=6
 
 # Shutdown
-SHUTDOWN_TIMEOUT_MS=30000
+SHUTDOWN_TIMEOUT_SECONDS=30
 ```
 
 ### 1.4 Docker
@@ -468,7 +469,7 @@ docker compose -f docker/docker-compose.yml up -d --build
 - `LISTEN_PORT` - Порт сервиса (default: 8080)
 - `LOG_LEVEL` - Уровень логирования (default: info)
 - `IMAGE_MAX_BYTES_MB` - Максимальный размер изображения в MB (default: 25)
-- `HEAVY_TASKS_MAX_CONCURRENCY` - Количество параллельных задач (default: 4)
+- `MAX_CONCURRENCY` - Количество параллельных задач (default: 4)
 - `IMAGE_DEFAULT_FORMAT` - Формат по умолчанию (default: webp)
 - `IMAGE_DEFAULT_QUALITY` - Качество по умолчанию (default: 80)
 
@@ -518,7 +519,7 @@ pnpm test:cov
 
 - CPU: 4 ядра
 - Memory: 4GB RAM
-- `HEAVY_TASKS_MAX_CONCURRENCY` = количество CPU ядер
+- `MAX_CONCURRENCY` = количество CPU ядер
 
 ## Мониторинг
 
@@ -665,8 +666,8 @@ export default registerAs('image', () => ({
   maxBytes: parseInt(process.env.IMAGE_MAX_BYTES_MB || '25', 10) * 1024 * 1024,
   
   queue: {
-    maxConcurrency: parseInt(process.env.HEAVY_TASKS_MAX_CONCURRENCY || '4', 10),
-    timeout: parseInt(process.env.HEAVY_TASKS_QUEUE_TIMEOUT_MS || '30000', 10),
+    maxConcurrency: parseInt(process.env.MAX_CONCURRENCY || '4', 10),
+    timeout: parseInt(process.env.QUEUE_TIMEOUT_SECONDS || '30', 10) * 1000,
   },
   
   defaults: {

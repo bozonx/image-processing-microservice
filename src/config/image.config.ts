@@ -98,9 +98,9 @@ export default registerAs('image', (): ImageConfig => {
   const config = plainToClass(ImageConfig, {
     maxBytes: parseInt(process.env.FILE_MAX_BYTES_MB ?? '25', 10) * 1024 * 1024,
     queue: {
-      maxConcurrency: parseInt(process.env.HEAVY_TASKS_MAX_CONCURRENCY ?? '4', 10),
-      timeout: parseInt(process.env.HEAVY_TASKS_QUEUE_TIMEOUT_MS ?? '30000', 10),
-      requestTimeout: parseInt(process.env.HEAVY_TASKS_REQUEST_TIMEOUT_MS ?? '60000', 10),
+      maxConcurrency: parseInt(process.env.MAX_CONCURRENCY ?? '4', 10),
+      timeout: parseInt(process.env.QUEUE_TIMEOUT_SECONDS ?? '30', 10) * 1000,
+      requestTimeout: parseInt(process.env.REQUEST_TIMEOUT_SECONDS ?? '60', 10) * 1000,
     },
     defaults: {
       format: process.env.IMAGE_DEFAULT_FORMAT ?? DefaultImageFormat.WEBP,

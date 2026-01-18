@@ -20,8 +20,10 @@ async function bootstrap() {
   });
   const configService = tempApp.get(ConfigService);
   const imageConfig = configService.get<{ maxBytes: number }>('image');
-  if (!imageConfig) {
-    throw new Error('Image config not found');
+  const appConfig = configService.get<AppConfig>('app');
+
+  if (!imageConfig || !appConfig) {
+    throw new Error('Config not found');
   }
 
   // Calculate body limit: maxBytes * 1.5 (to account for Base64 encoding overhead)
@@ -34,7 +36,9 @@ async function bootstrap() {
     new FastifyAdapter({
       logger: false, // We'll use Pino logger instead
       bodyLimit: bodyLimitBytes,
-    }),
+      forceCloseConnections: true,
+      closeTimeout: appConfig.shutdownTimeout,
+    } as any),
     {
       bufferLogs: true,
     },
@@ -44,11 +48,6 @@ async function bootstrap() {
   app.useLogger(app.get(Logger));
 
   const logger = app.get(Logger);
-  const appConfig = configService.get<AppConfig>('app');
-
-  if (!appConfig) {
-    throw new Error('App config not found');
-  }
 
   app.useGlobalPipes(
     new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }),
