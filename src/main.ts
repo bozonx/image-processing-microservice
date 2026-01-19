@@ -73,7 +73,7 @@ async function bootstrap() {
   const publicPath = join(__dirname, '..', '..', 'public');
   await app.register(fastifyStatic, {
     root: publicPath,
-    prefix: '/',
+    prefix: '/ui',
     constraints: {},
   });
 
@@ -88,7 +88,7 @@ async function bootstrap() {
     `🚀 NestJS service is running on: http://${appConfig.host}:${appConfig.port}/${globalPrefix}`,
     'Bootstrap',
   );
-  logger.log(`🖼️  UI available at: http://${appConfig.host}:${appConfig.port}/`, 'Bootstrap');
+  logger.log(`🖼️  UI available at: http://${appConfig.host}:${appConfig.port}/ui`, 'Bootstrap');
   logger.log(`📊 Environment: ${appConfig.nodeEnv}`, 'Bootstrap');
   logger.log(`📝 Log level: ${appConfig.logLevel}`, 'Bootstrap');
   logger.log(`📦 Body limit: ${Math.round(bodyLimitBytes / 1024 / 1024)}MB`, 'Bootstrap');
