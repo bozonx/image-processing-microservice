@@ -341,7 +341,7 @@ describe('ImageProcessorService', () => {
     expect(result.dimensions.height).toBe(300);
   });
 
-  it('should remove alpha channel when requested', async () => {
+  it('should remove alpha channel when requested via flatten', async () => {
     const inputBuffer = await sharp({
       create: {
         width: 100,
@@ -357,7 +357,7 @@ describe('ImageProcessorService', () => {
       image: inputBuffer.toString('base64'),
       mimeType: 'image/png',
       transform: {
-        removeAlpha: true,
+        flatten: '#ff0000',
       },
       output: {
         format: 'png',

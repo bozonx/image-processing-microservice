@@ -147,11 +147,7 @@ export class TransformDto {
 
   @IsOptional()
   @IsString()
-  public backgroundColor?: string;
-
-  @IsOptional()
-  @IsBoolean()
-  public removeAlpha?: boolean;
+  public flatten?: string;
 
   @IsOptional()
   @ValidateNested()

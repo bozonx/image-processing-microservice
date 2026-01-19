@@ -279,10 +279,10 @@ function buildTransformObject() {
   if (flip) transform.flip = true;
   if (flop) transform.flop = true;
 
-  // Background color
-  const backgroundColor = document.getElementById('backgroundColor').value.trim();
-  if (backgroundColor) {
-    transform.backgroundColor = backgroundColor;
+  // Flatten
+  const flatten = document.getElementById('flattenColor').value.trim();
+  if (flatten) {
+    transform.flatten = flatten;
   }
 
   // Watermark

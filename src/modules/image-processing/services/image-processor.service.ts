@@ -166,14 +166,9 @@ export class ImageProcessorService {
       pipeline = pipeline.rotate(transform.rotate);
     }
 
-    // Background color (e.g., for flattening transparent images)
-    if (transform.backgroundColor) {
-      pipeline = pipeline.flatten({ background: transform.backgroundColor });
-    }
-
-    // removeAlpha: remove alpha channel if requested
-    if (transform.removeAlpha) {
-      pipeline = pipeline.removeAlpha();
+    // Flatten: remove alpha channel and replace with background color
+    if (transform.flatten) {
+      pipeline = pipeline.flatten({ background: transform.flatten });
     }
 
     return pipeline;
