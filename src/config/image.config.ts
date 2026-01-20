@@ -97,7 +97,7 @@ export class ImageConfig {
 
 export default registerAs('image', (): ImageConfig => {
   const config = plainToClass(ImageConfig, {
-    maxBytes: parseInt(process.env.FILE_MAX_BYTES_MB ?? '25', 10) * 1024 * 1024,
+    maxBytes: parseInt(process.env.FILE_MAX_BYTES_MB ?? '100', 10) * 1024 * 1024,
     queue: {
       maxConcurrency: parseInt(process.env.MAX_CONCURRENCY ?? '4', 10),
       timeout: parseInt(process.env.QUEUE_TIMEOUT_SECONDS ?? '30', 10) * 1000,
