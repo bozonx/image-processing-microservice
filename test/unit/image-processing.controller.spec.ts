@@ -1,4 +1,4 @@
-import { jest, describe, it, expect, beforeEach } from '@jest/globals';
+import { jest } from '@jest/globals';
 import { Test, type TestingModule } from '@nestjs/testing';
 import { BadRequestException } from '@nestjs/common';
 import { Readable, Writable } from 'node:stream';
@@ -6,6 +6,7 @@ import { ImageProcessingController } from '../../src/modules/image-processing/im
 import { ImageProcessorService } from '../../src/modules/image-processing/services/image-processor.service.js';
 import { ExifService } from '../../src/modules/image-processing/services/exif.service.js';
 import { QueueService } from '../../src/modules/image-processing/services/queue.service.js';
+import { ConfigService } from '@nestjs/config';
 
 describe('ImageProcessingController', () => {
   let controller: ImageProcessingController;
@@ -34,6 +35,17 @@ describe('ImageProcessingController', () => {
           useValue: {
             add: jest.fn((task: () => Promise<any>) => task()),
             getStatus: jest.fn(),
+          },
+        },
+        {
+          provide: ConfigService,
+          useValue: {
+            get: jest.fn().mockImplementation((key: string) => {
+              if (key === 'image') {
+                return { maxBytes: 10 * 1024 * 1024 };
+              }
+              return undefined;
+            }),
           },
         },
       ],
@@ -74,7 +86,7 @@ describe('ImageProcessingController', () => {
           this.end();
         }, 0);
       }
-      _write(_chunk: any, _encoding: string, callback: (error?: Error | null) => void) {
+      override _write(_chunk: any, _encoding: string, callback: (error?: Error | null) => void) {
         callback();
       }
     })();
@@ -103,8 +115,9 @@ describe('ImageProcessingController', () => {
 
       const req = mockReq([filePart]);
       const res = mockRes();
+      const outputStream = Readable.from([Buffer.from('processed')]);
       const processedResult = {
-        stream: 'processed-stream',
+        stream: outputStream,
         mimeType: 'image/webp',
         extension: 'webp',
       };
@@ -122,7 +135,7 @@ describe('ImageProcessingController', () => {
         undefined,
       );
       expect(res.type).toHaveBeenCalledWith('image/webp');
-      expect(res.send).toHaveBeenCalledWith('processed-stream');
+      expect(res.send).toHaveBeenCalledWith(outputStream);
     });
 
     it('should handle watermark and params', async () => {
@@ -150,8 +163,9 @@ describe('ImageProcessingController', () => {
 
       const req = mockReq([filePart, watermarkPart, paramsPart]);
       const res = mockRes();
+      const outputStream = Readable.from([Buffer.from('processed')]);
       const processedResult = {
-        stream: 'processed-stream',
+        stream: outputStream,
         mimeType: 'image/webp',
         extension: 'webp',
       };
@@ -214,7 +228,7 @@ describe('ImageProcessingController', () => {
       };
 
       const req = mockReq([filePart, paramsPart]);
-      await expect(controller.process(req as any, {} as any)).rejects.toThrow(BadRequestException);
+      await expect(controller.process(req as any, {} as any)).rejects.toThrow('Invalid params');
     });
   });
 

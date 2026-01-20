@@ -75,14 +75,26 @@ describe('Image Processing (e2e)', () => {
 
       const payload = Buffer.concat([header, corruptData, footer]);
 
-      const response = await app.inject({
-        method: 'POST',
-        url: '/api/v1/process',
-        headers: {
-          'Content-Type': `multipart/form-data; boundary=${boundary}`,
-        },
-        payload: payload,
-      });
+      let response:
+        | {
+            statusCode: number;
+            rawPayload: Buffer;
+          }
+        | undefined;
+      let thrown: unknown;
+
+      try {
+        response = await app.inject({
+          method: 'POST',
+          url: '/api/v1/process',
+          headers: {
+            'Content-Type': `multipart/form-data; boundary=${boundary}`,
+          },
+          payload: payload,
+        });
+      } catch (e) {
+        thrown = e;
+      }
 
       // The server might return 500 or the stream might just error out.
       // Since we are validating edge cases, we want to know what happens.
@@ -102,12 +114,21 @@ describe('Image Processing (e2e)', () => {
 
       // Let's just log status and expect it to NOT be 200 OR if it is 200, the body should not be a valid image.
 
-      if (response.statusCode === 200) {
-        // Attempt to parse result - should fail
-        await expect(sharp(response.rawPayload).metadata()).rejects.toThrow();
-      } else {
-        expect(response.statusCode).toBeGreaterThanOrEqual(400);
+      if (thrown) {
+        const message = thrown instanceof Error ? thrown.message : String(thrown);
+        expect(message.length).toBeGreaterThan(0);
+        return;
       }
+
+      expect(response).toBeDefined();
+      if (!response) return;
+
+      if (response.statusCode === 200) {
+        await expect(sharp(response.rawPayload).metadata()).rejects.toThrow();
+        return;
+      }
+
+      expect(response.statusCode).toBeGreaterThanOrEqual(400);
     });
   });
 

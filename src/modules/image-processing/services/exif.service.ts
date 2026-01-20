@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, PayloadTooLargeException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import exifr from 'exifr';
 import { Readable } from 'node:stream';
@@ -35,7 +35,7 @@ export class ExifService {
       for await (const chunk of stream) {
         totalLength += chunk.length;
         if (totalLength > this.maxBytes) {
-          throw new Error(`Image size exceeds maximum ${this.maxBytes} bytes`);
+          throw new PayloadTooLargeException(`Image size exceeds maximum ${this.maxBytes} bytes`);
         }
         chunks.push(Buffer.from(chunk));
       }
@@ -44,7 +44,7 @@ export class ExifService {
 
       // Check MIME type
       if (!mimeType.startsWith('image/')) {
-        throw new Error(`Invalid MIME type: ${mimeType}`);
+        throw new BadRequestException(`Invalid MIME type: ${mimeType}`);
       }
 
       // parse() returns data or undefined if nothing found
@@ -68,13 +68,22 @@ export class ExifService {
       const duration = Date.now() - startTime;
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
 
-      this.logger.debug({
+      this.logger.warn({
         msg: 'EXIF extraction failed',
         duration,
         error: errorMessage,
+        stack: error instanceof Error ? error.stack : undefined,
       });
 
-      return null;
+      if (error instanceof PayloadTooLargeException) {
+        throw error;
+      }
+
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
+
+      throw new BadRequestException(`Failed to parse EXIF: ${errorMessage}`);
     }
   }
 }

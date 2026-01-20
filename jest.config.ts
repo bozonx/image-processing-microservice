@@ -17,6 +17,13 @@ const transform = {
 const config: Config = {
   extensionsToTreatAsEsm: ['.ts'],
 
+  modulePathIgnorePatterns: ['<rootDir>/dist/'],
+
+  haste: {
+    throwOnModuleCollision: false,
+    hasteImplModulePath: undefined,
+  },
+
   // Parallel test execution - use 50% of CPU cores locally, limit to 2 in CI
   maxWorkers: process.env.CI ? 2 : '50%',
   // Stop test execution on first failure in CI for faster feedback
@@ -29,10 +36,12 @@ const config: Config = {
     {
       displayName: 'unit',
       preset: 'ts-jest/presets/default-esm',
+      injectGlobals: true,
       testEnvironment: 'node',
       moduleFileExtensions,
       rootDir: '.',
       testMatch: ['<rootDir>/test/unit/**/*.spec.ts'],
+      modulePathIgnorePatterns: ['<rootDir>/dist/'],
       testPathIgnorePatterns: ['<rootDir>/test/e2e/', '<rootDir>/dist/'],
       setupFilesAfterEnv: ['<rootDir>/test/setup/unit.setup.ts'],
       collectCoverageFrom: ['src/**/*.(t|j)s'],
@@ -49,11 +58,14 @@ const config: Config = {
     {
       displayName: 'e2e',
       preset: 'ts-jest/presets/default-esm',
+      injectGlobals: true,
       testEnvironment: 'node',
       moduleFileExtensions,
       rootDir: '.',
       testMatch: ['<rootDir>/test/e2e/**/*.e2e-spec.ts'],
       setupFilesAfterEnv: ['<rootDir>/test/setup/e2e.setup.ts'],
+      modulePathIgnorePatterns: ['<rootDir>/dist/'],
+      testPathIgnorePatterns: ['<rootDir>/dist/'],
       collectCoverageFrom: ['src/**/*.(t|j)s'],
       coverageDirectory: 'coverage',
       coveragePathIgnorePatterns: ['/node_modules/', '/dist/', '/test/', '.module.ts$', 'main.ts$'],

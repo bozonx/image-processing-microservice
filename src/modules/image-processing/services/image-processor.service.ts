@@ -71,13 +71,22 @@ export class ImageProcessorService {
     // Pipe the input stream into the sharp pipeline (if not buffered for watermark)
     const resultStream = watermark && transform?.watermark ? pipeline : inputStream.pipe(pipeline);
 
-    // Listen for pipeline errors to avoid unhandled stream errors
+    // Propagate sharp errors to the returned stream to avoid silent truncation.
+    // Controllers may then terminate the HTTP response with the underlying error.
     pipeline.on('error', err => {
       this.logger.error({
         msg: 'Sharp pipeline error',
         error: err.message,
         stack: err.stack,
       });
+
+      try {
+        if (!resultStream.destroyed) {
+          resultStream.destroy(err);
+        }
+      } catch {
+        // ignore
+      }
     });
 
     const format = output?.format ?? this.defaults.format;

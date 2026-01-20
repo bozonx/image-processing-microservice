@@ -7,6 +7,7 @@ import {
   Res,
   BadRequestException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
@@ -17,6 +18,8 @@ import { ExifService } from './services/exif.service.js';
 import { QueueService } from './services/queue.service.js';
 import { ProcessImageDto } from './dto/process-image.dto.js';
 import { ExtractExifDto } from './dto/exif.dto.js';
+import { formatValidationErrors } from '../../utils/validation-errors.js';
+import type { ImageConfig } from '../../config/image.config.js';
 
 /**
  * Controller for handling image processing and EXIF extraction requests.
@@ -28,7 +31,37 @@ export class ImageProcessingController {
     private readonly imageProcessor: ImageProcessorService,
     private readonly exifService: ExifService,
     private readonly queueService: QueueService,
+    private readonly configService: ConfigService,
   ) {}
+
+  private getMaxBytes(): number | undefined {
+    const config = this.configService.get<ImageConfig>('image');
+    return config?.maxBytes;
+  }
+
+  private async readStreamToBuffer(
+    stream: NodeJS.ReadableStream,
+    maxBytes?: number,
+  ): Promise<Buffer> {
+    const chunks: Buffer[] = [];
+    let totalLength = 0;
+
+    try {
+      for await (const chunk of stream as any as AsyncIterable<Buffer>) {
+        const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+        totalLength += buf.length;
+        if (typeof maxBytes === 'number' && totalLength > maxBytes) {
+          throw new BadRequestException(`File size exceeds maximum ${maxBytes} bytes`);
+        }
+        chunks.push(buf);
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      throw new BadRequestException(`Failed to read upload stream: ${message}`);
+    }
+
+    return Buffer.concat(chunks);
+  }
 
   /**
    * Processes an image stream via multipart/form-data.
@@ -52,34 +85,38 @@ export class ImageProcessingController {
     let watermarkFileData: { buffer: Buffer; mimetype: string } | null = null;
     let dto = new ProcessImageDto();
 
-    for await (const part of parts) {
-      if (part.type === 'file') {
-        const chunks: Buffer[] = [];
-        for await (const chunk of part.file) {
-          chunks.push(chunk);
-        }
-        const buffer = Buffer.concat(chunks);
+    try {
+      for await (const part of parts) {
+        if (part.type === 'file') {
+          const buffer = await this.readStreamToBuffer(part.file, this.getMaxBytes());
 
-        if (part.fieldname === 'file') {
-          mainFileData = { buffer, mimetype: part.mimetype };
-        } else if (part.fieldname === 'watermark') {
-          watermarkFileData = { buffer, mimetype: part.mimetype };
-        }
-      } else if (part.type === 'field' && part.fieldname === 'params') {
-        try {
-          const fieldValue = part.value as string;
-          const parsed = JSON.parse(fieldValue);
-          dto = plainToInstance(ProcessImageDto, parsed);
-
-          const errors = await validate(dto);
-          if (errors.length > 0) {
-            throw new BadRequestException(errors.toString());
+          if (part.fieldname === 'file') {
+            mainFileData = { buffer, mimetype: part.mimetype };
+          } else if (part.fieldname === 'watermark') {
+            watermarkFileData = { buffer, mimetype: part.mimetype };
           }
-        } catch (e) {
-          if (e instanceof BadRequestException) throw e;
-          throw new BadRequestException('Invalid params format');
+        } else if (part.type === 'field' && part.fieldname === 'params') {
+          try {
+            const fieldValue = part.value as string;
+            const parsed = JSON.parse(fieldValue);
+            dto = plainToInstance(ProcessImageDto, parsed);
+
+            const errors = await validate(dto);
+            if (errors.length > 0) {
+              throw new BadRequestException(formatValidationErrors(errors));
+            }
+          } catch (e) {
+            const message = e instanceof Error ? e.message : 'Unknown error';
+            throw new BadRequestException(`Invalid params: ${message}`);
+          }
         }
       }
+    } catch (error) {
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      throw new BadRequestException(`Failed to process multipart payload: ${message}`);
     }
 
     if (!mainFileData) {
@@ -110,6 +147,17 @@ export class ImageProcessingController {
 
       res.type(result.mimeType);
       res.header('Content-Disposition', `inline; filename="processed.${result.extension}"`);
+
+      result.stream.on('error', err => {
+        const message = err instanceof Error ? err.message : 'Unknown error';
+        try {
+          if (!res.raw.destroyed) {
+            res.raw.destroy(err instanceof Error ? err : new Error(message));
+          }
+        } catch {
+          // ignore
+        }
+      });
 
       // Pipe the sharp output to the response
       res.send(result.stream);
@@ -153,19 +201,16 @@ export class ImageProcessingController {
         dto = plainToInstance(ExtractExifDto, parsed);
         const errors = await validate(dto);
         if (errors.length > 0) {
-          throw new BadRequestException(errors.toString());
+          throw new BadRequestException(formatValidationErrors(errors));
         }
-      } catch (_e) {
-        throw new BadRequestException('Invalid params format');
+      } catch (e) {
+        const message = e instanceof Error ? e.message : 'Unknown error';
+        throw new BadRequestException(`Invalid params: ${message}`);
       }
     }
 
     // Buffer for backpressure
-    const chunks: Buffer[] = [];
-    for await (const chunk of data.file) {
-      chunks.push(chunk);
-    }
-    const buffer = Buffer.concat(chunks);
+    const buffer = await this.readStreamToBuffer(data.file, this.getMaxBytes());
     const priority = dto.priority ?? 2;
 
     const result = await this.queueService.add(async () => {

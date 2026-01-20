@@ -1,4 +1,3 @@
-import { describe, it, expect, beforeEach } from '@jest/globals';
 import { Test, type TestingModule } from '@nestjs/testing';
 import { ConfigModule } from '@nestjs/config';
 import { Readable } from 'node:stream';
@@ -8,8 +7,10 @@ import sharp from 'sharp';
 
 describe('ExifService', () => {
   let service: ExifService;
+  const prevFileMaxBytesMb = process.env.FILE_MAX_BYTES_MB;
 
   beforeEach(async () => {
+    process.env.FILE_MAX_BYTES_MB = '1';
     const module: TestingModule = await Test.createTestingModule({
       imports: [
         ConfigModule.forRoot({
@@ -20,6 +21,14 @@ describe('ExifService', () => {
     }).compile();
 
     service = module.get<ExifService>(ExifService);
+  });
+
+  afterAll(() => {
+    if (typeof prevFileMaxBytesMb === 'string') {
+      process.env.FILE_MAX_BYTES_MB = prevFileMaxBytesMb;
+    } else {
+      delete process.env.FILE_MAX_BYTES_MB;
+    }
   });
 
   const bufferToStream = (buffer: Buffer): Readable => {
@@ -71,24 +80,26 @@ describe('ExifService', () => {
   });
 
   it('should throw error for oversized image', async () => {
-    // 30MB
-    const largeBuffer = Buffer.allocUnsafe(30 * 1024 * 1024);
+    // >1MB
+    const largeBuffer = Buffer.allocUnsafe(2 * 1024 * 1024);
 
-    await expect(service.extract(bufferToStream(largeBuffer), 'image/jpeg')).resolves.toBeNull();
-    // Note: service.extract catches errors and returns null, except for size/mime which we moved inside
-    // Wait, let's look at the implementation again
+    await expect(service.extract(bufferToStream(largeBuffer), 'image/jpeg')).rejects.toThrow(
+      'Image size exceeds maximum',
+    );
   });
 
   it('should throw error for invalid MIME type', async () => {
     const buffer = Buffer.from('test');
 
-    const result = await service.extract(bufferToStream(buffer), 'text/plain');
-    expect(result).toBeNull();
+    await expect(service.extract(bufferToStream(buffer), 'text/plain')).rejects.toThrow(
+      'Invalid MIME type',
+    );
   });
 
-  it('should handle corrupt buffer gracefully during extraction', async () => {
+  it('should throw error for corrupt buffer during extraction', async () => {
     const corruptBuffer = Buffer.from('not an image');
-    const result = await service.extract(bufferToStream(corruptBuffer), 'image/jpeg');
-    expect(result).toBeNull();
+    await expect(service.extract(bufferToStream(corruptBuffer), 'image/jpeg')).rejects.toThrow(
+      'Failed to parse EXIF',
+    );
   });
 });
