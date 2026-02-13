@@ -9,6 +9,8 @@ import { fileURLToPath } from 'node:url';
 import fastifyStatic from '@fastify/static';
 import { AppModule } from './app.module.js';
 import type { AppConfig } from './config/app.config.js';
+import type { AuthConfig } from './config/auth.config.js';
+import { createAuthHook } from './common/auth/auth.hook.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = join(__filename, '..');
@@ -21,6 +23,9 @@ async function bootstrap() {
   const configService = tempApp.get(ConfigService);
   const imageConfig = configService.get<{ maxBytes: number }>('image');
   const appConfig = configService.get<AppConfig>('app');
+  const authConfig = configService.get<(AuthConfig & { bearerTokenList: string[] }) | undefined>(
+    'auth',
+  );
 
   if (!imageConfig || !appConfig) {
     throw new Error('Config not found');
@@ -58,6 +63,25 @@ async function bootstrap() {
   const globalPrefix = appConfig.basePath ? `${appConfig.basePath}/api/v1` : 'api/v1';
   app.setGlobalPrefix(globalPrefix);
 
+  const basicUser = authConfig?.basicUser;
+  const basicPass = authConfig?.basicPass;
+  const bearerTokens = authConfig?.bearerTokenList ?? [];
+
+  app
+    .getHttpAdapter()
+    .getInstance()
+    .addHook(
+      'onRequest',
+      createAuthHook({
+        basePath: appConfig.basePath,
+        uiPrefix: '/ui',
+        apiPrefix: '/api/v1',
+        basicUser,
+        basicPass,
+        bearerTokens,
+      }),
+    );
+
   // Register multipart support for streaming uploads
   await app.register(import('@fastify/multipart'), {
     limits: {
@@ -89,7 +113,10 @@ async function bootstrap() {
     `🚀 NestJS service is running on: http://${appConfig.host}:${appConfig.port}/${globalPrefix}`,
     'Bootstrap',
   );
-  logger.log(`🖼️  UI available at: http://${appConfig.host}:${appConfig.port}${uiPrefix}`, 'Bootstrap');
+  logger.log(
+    `🖼️  UI available at: http://${appConfig.host}:${appConfig.port}${uiPrefix}`,
+    'Bootstrap',
+  );
   logger.log(`📊 Environment: ${appConfig.nodeEnv}`, 'Bootstrap');
   logger.log(`📝 Log level: ${appConfig.logLevel}`, 'Bootstrap');
   logger.log(`📦 Body limit: ${Math.round(bodyLimitBytes / 1024 / 1024)}MB`, 'Bootstrap');

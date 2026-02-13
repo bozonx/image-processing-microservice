@@ -1,7 +1,10 @@
 import { Test } from '@nestjs/testing';
 import { ValidationPipe } from '@nestjs/common';
 import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fastify';
+import { ConfigService } from '@nestjs/config';
 import { AppModule } from '../../src/app.module.js';
+import type { AuthConfig } from '../../src/config/auth.config.js';
+import { createAuthHook } from '../../src/common/auth/auth.hook.js';
 
 export async function createTestApp(): Promise<NestFastifyApplication> {
   const moduleRef = await Test.createTestingModule({
@@ -22,6 +25,29 @@ export async function createTestApp(): Promise<NestFastifyApplication> {
   const basePath = (process.env.BASE_PATH ?? '').replace(/^\/+|\/+$/g, '');
   const globalPrefix = basePath ? `${basePath}/api/v1` : 'api/v1';
   app.setGlobalPrefix(globalPrefix);
+
+  const configService = app.get(ConfigService);
+  const authConfig = configService.get<(AuthConfig & { bearerTokenList: string[] }) | undefined>(
+    'auth',
+  );
+  const basicUser = authConfig?.basicUser;
+  const basicPass = authConfig?.basicPass;
+  const bearerTokens = authConfig?.bearerTokenList ?? [];
+
+  app
+    .getHttpAdapter()
+    .getInstance()
+    .addHook(
+      'onRequest',
+      createAuthHook({
+        basePath,
+        uiPrefix: '/ui',
+        apiPrefix: '/api/v1',
+        basicUser,
+        basicPass,
+        bearerTokens,
+      }),
+    );
 
   await app.register(import('@fastify/multipart'), {
     limits: {

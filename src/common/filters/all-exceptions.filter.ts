@@ -45,14 +45,27 @@ export class AllExceptionsFilter implements ExceptionFilter {
       this.logger.warn(`${request.method} ${request.url} - ${status} - ${message}`);
     }
 
-    void response.status(status).send({
-      statusCode: status,
-      timestamp: new Date().toISOString(),
-      path: request.url,
-      method: request.method,
-      message,
-      error: errorResponse,
-    });
+    // If headers were already sent or response started, we cannot send a new JSON response.
+    // This often happens during streaming timeouts.
+    if (response.raw.headersSent || response.sent) {
+      this.logger.warn('Headers already sent, cannot send error response to client');
+      if (!response.raw.destroyed) {
+        response.raw.destroy(exception instanceof Error ? exception : new Error(message));
+      }
+      return;
+    }
+
+    void response
+      .status(status)
+      .type('application/json')
+      .send({
+        statusCode: status,
+        timestamp: new Date().toISOString(),
+        path: request.url,
+        method: request.method,
+        message,
+        error: errorResponse,
+      });
   }
 
   private extractMessage(exception: unknown): string {

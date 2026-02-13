@@ -6,6 +6,7 @@ import { HealthModule } from './modules/health/health.module.js';
 import { ImageProcessingModule } from './modules/image-processing/image-processing.module.js';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter.js';
 import appConfig from './config/app.config.js';
+import authConfig from './config/auth.config.js';
 import imageConfig from './config/image.config.js';
 import { getLoggerConfig } from './common/logger/logger.factory.js';
 
@@ -13,7 +14,7 @@ import { getLoggerConfig } from './common/logger/logger.factory.js';
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      load: [appConfig, imageConfig],
+      load: [appConfig, authConfig, imageConfig],
       envFilePath: [`.env.${process.env.NODE_ENV ?? 'development'}`, '.env'],
       cache: true,
     }),
