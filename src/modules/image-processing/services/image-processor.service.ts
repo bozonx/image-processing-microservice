@@ -45,7 +45,7 @@ export class ImageProcessorService {
     output?: OutputDto,
     watermark?: { buffer: Buffer; mimetype: string },
   ): Promise<StreamProcessResult> {
-    if (!mimeType.startsWith('image/')) {
+    if (!(mimeType.startsWith('image/') || mimeType === 'application/octet-stream')) {
       throw new BadRequestException(`Invalid MIME type: ${mimeType}`);
     }
 

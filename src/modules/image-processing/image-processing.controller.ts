@@ -6,6 +6,8 @@ import {
   Req,
   Res,
   BadRequestException,
+  PayloadTooLargeException,
+  UnsupportedMediaTypeException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { FastifyRequest, FastifyReply } from 'fastify';
@@ -73,7 +75,7 @@ export class ImageProcessingController {
         totalLength += buf.length;
 
         if (typeof maxBytes === 'number' && totalLength > maxBytes) {
-          callback(new BadRequestException(`File size exceeds maximum ${maxBytes} bytes`));
+          callback(new PayloadTooLargeException(`File size exceeds maximum ${maxBytes} bytes`));
           return;
         }
 
@@ -99,7 +101,7 @@ export class ImageProcessingController {
         const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
         totalLength += buf.length;
         if (typeof maxBytes === 'number' && totalLength > maxBytes) {
-          throw new BadRequestException(`File size exceeds maximum ${maxBytes} bytes`);
+          throw new PayloadTooLargeException(`File size exceeds maximum ${maxBytes} bytes`);
         }
         chunks.push(buf);
       }
@@ -221,8 +223,15 @@ export class ImageProcessingController {
     const contentType = this.getHeaderValue(req.headers['content-type']);
     const mimeType = contentType?.split(';')[0]?.trim();
 
-    if (!mimeType?.startsWith('image/')) {
-      throw new BadRequestException('Invalid content type, expected image/*');
+    if (!mimeType) {
+      throw new UnsupportedMediaTypeException('Missing content type');
+    }
+
+    const acceptedMimeType = mimeType.startsWith('image/') ? mimeType : 'application/octet-stream';
+    if (!mimeType.startsWith('image/') && mimeType !== 'application/octet-stream') {
+      throw new UnsupportedMediaTypeException(
+        'Invalid content type, expected image/* or application/octet-stream',
+      );
     }
 
     const dto = await this.parseProcessParamsFromHeader(req);
@@ -237,12 +246,47 @@ export class ImageProcessingController {
       const limiter = this.createMaxBytesTransform(this.getMaxBytes());
       const inputStream = (req.raw as unknown as Readable).pipe(limiter);
 
+      let resultStream: Readable | undefined;
+
+      const cleanup = (error?: Error) => {
+        try {
+          if (resultStream && !resultStream.destroyed) {
+            resultStream.destroy(error);
+          }
+        } catch {
+          // ignore
+        }
+
+        try {
+          if (!inputStream.destroyed) {
+            inputStream.destroy(error);
+          }
+        } catch {
+          // ignore
+        }
+      };
+
+      res.raw.once('close', () => {
+        if (!res.raw.writableEnded && !res.raw.destroyed) {
+          cleanup(new Error('Client connection closed'));
+          return;
+        }
+
+        cleanup();
+      });
+
+      res.raw.once('error', err => {
+        cleanup(err instanceof Error ? err : new Error('Response error'));
+      });
+
       const result = await this.imageProcessor.processStream(
         inputStream,
-        mimeType,
+        acceptedMimeType,
         dto.transform,
         dto.output,
       );
+
+      resultStream = result.stream;
 
       res.type(result.mimeType);
       res.header('Content-Disposition', `inline; filename="processed.${result.extension}"`);
@@ -260,6 +304,7 @@ export class ImageProcessingController {
 
       res.send(result.stream);
       await finished(res.raw);
+      cleanup();
     }, priority);
   }
 

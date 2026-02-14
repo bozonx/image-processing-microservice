@@ -4,6 +4,8 @@ import {
   Logger,
   ServiceUnavailableException,
   RequestTimeoutException,
+  HttpException,
+  HttpStatus,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import PQueue from 'p-queue';
@@ -18,13 +20,15 @@ export class QueueService implements OnModuleDestroy {
   private readonly logger = new Logger(QueueService.name);
   private readonly queue: PQueue;
   private readonly requestTimeout: number;
+  private readonly maxQueueSize: number;
   private isShuttingDown = false;
 
   constructor(private readonly configService: ConfigService) {
     const config = this.configService.get<ImageConfig>('image')!;
-    const { maxConcurrency, timeout, requestTimeout } = config.queue;
+    const { maxConcurrency, timeout, requestTimeout, maxQueueSize } = config.queue;
 
     this.requestTimeout = requestTimeout;
+    this.maxQueueSize = maxQueueSize;
 
     this.queue = new PQueue({
       concurrency: maxConcurrency,
@@ -32,7 +36,7 @@ export class QueueService implements OnModuleDestroy {
     });
 
     this.logger.log(
-      `Queue initialized with maxConcurrency: ${maxConcurrency}, job timeout: ${timeout}ms, request timeout: ${this.requestTimeout}ms`,
+      `Queue initialized with maxConcurrency: ${maxConcurrency}, maxQueueSize: ${this.maxQueueSize}, job timeout: ${timeout}ms, request timeout: ${this.requestTimeout}ms`,
     );
   }
 
@@ -50,6 +54,10 @@ export class QueueService implements OnModuleDestroy {
       throw new ServiceUnavailableException('Service is shutting down, rejecting new tasks');
     }
 
+    if (this.maxQueueSize > 0 && this.queue.size >= this.maxQueueSize) {
+      throw new HttpException('Queue is overloaded', HttpStatus.TOO_MANY_REQUESTS);
+    }
+
     const startTime = Date.now();
     let timeoutHandle: NodeJS.Timeout | undefined;
 
@@ -59,7 +67,11 @@ export class QueueService implements OnModuleDestroy {
       // Create a timeout promise to reject if the total time exceeds requestTimeout
       const timeoutPromise = new Promise<never>((_, reject) => {
         timeoutHandle = setTimeout(() => {
-          reject(new RequestTimeoutException('Request timeout'));
+          reject(
+            new RequestTimeoutException(
+              `Request timeout (queueSize=${this.queue.size}, pending=${this.queue.pending})`,
+            ),
+          );
         }, this.requestTimeout);
       });
 

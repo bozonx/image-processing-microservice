@@ -31,8 +31,8 @@ async function bootstrap() {
     throw new Error('Config not found');
   }
 
-  // Calculate body limit: maxBytes * 1.5 (to account for Base64 encoding overhead)
-  const bodyLimitBytes = Math.floor(imageConfig.maxBytes * 1.5);
+  // Body limit should match raw binary uploads; multipart is handled by @fastify/multipart limits
+  const bodyLimitBytes = imageConfig.maxBytes;
   await tempApp.close();
 
   // Create app with bufferLogs enabled to capture early logs

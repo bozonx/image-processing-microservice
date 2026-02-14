@@ -245,7 +245,7 @@ curl -X POST http://localhost:8080/api/v1/process \
 
 | Параметр | Значение |
 | :--- | :--- |
-| `Content-Type` | **Обязательно.** Должен быть `image/*` (например, `image/jpeg`). |
+| `Content-Type` | **Обязательно.** Должен быть `image/*` (например, `image/jpeg`) или `application/octet-stream`. |
 | `x-img-params` | **Опционально.** JSON строка с параметрами обработки (тот же формат, что и `params` в multipart). |
 | Watermark | **Не поддерживается** в этом эндпоинте. |
 
@@ -324,6 +324,7 @@ curl -X POST http://localhost:8080/api/v1/exif \
 - `TZ` - Временная зона (default: UTC)
 - `FILE_MAX_BYTES_MB` - Максимальный размер входного файла в MB (default: 25)
 - `MAX_CONCURRENCY` - Количество параллельных задач обработки (default: 4)
+- `QUEUE_MAX_SIZE` - Максимальный размер очереди ожидающих задач (0 = без ограничений) (default: 100)
 - `QUEUE_TIMEOUT_SECONDS` - Таймаут ожидания задачи в очереди в секундах (default: 30)
 - `REQUEST_TIMEOUT_SECONDS` - Таймаут выполнения запроса в секундах (default: 60)
 - `SHUTDOWN_TIMEOUT_SECONDS` - Таймаут graceful shutdown в секундах (default: 30)

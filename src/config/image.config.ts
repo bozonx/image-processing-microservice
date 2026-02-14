@@ -28,6 +28,10 @@ export class QueueConfig {
   public maxConcurrency!: number;
 
   @IsInt()
+  @Min(0)
+  public maxQueueSize!: number;
+
+  @IsInt()
   @Min(1000)
   public timeout!: number;
 
@@ -100,6 +104,7 @@ export default registerAs('image', (): ImageConfig => {
     maxBytes: parseInt(process.env.FILE_MAX_BYTES_MB ?? '100', 10) * 1024 * 1024,
     queue: {
       maxConcurrency: parseInt(process.env.MAX_CONCURRENCY ?? '4', 10),
+      maxQueueSize: parseInt(process.env.QUEUE_MAX_SIZE ?? '100', 10),
       timeout: parseInt(process.env.QUEUE_TIMEOUT_SECONDS ?? '60', 10) * 1000,
       requestTimeout: parseInt(process.env.REQUEST_TIMEOUT_SECONDS ?? '120', 10) * 1000,
     },

@@ -1,6 +1,10 @@
 import { jest } from '@jest/globals';
 import { Test, type TestingModule } from '@nestjs/testing';
-import { BadRequestException } from '@nestjs/common';
+import {
+  BadRequestException,
+  PayloadTooLargeException,
+  UnsupportedMediaTypeException,
+} from '@nestjs/common';
 import { Readable, Writable } from 'node:stream';
 import { ImageProcessingController } from '../../src/modules/image-processing/image-processing.controller.js';
 import { ImageProcessorService } from '../../src/modules/image-processing/services/image-processor.service.js';
@@ -40,7 +44,7 @@ describe('ImageProcessingController', () => {
         {
           provide: ConfigService,
           useValue: {
-            get: jest.fn().mockImplementation((key: string) => {
+            get: jest.fn().mockImplementation((key: unknown) => {
               if (key === 'image') {
                 return { maxBytes: 10 * 1024 * 1024 };
               }
@@ -62,6 +66,7 @@ describe('ImageProcessingController', () => {
     headers: Record<string, string> = { 'content-type': 'multipart/form-data' },
   ) => ({
     headers,
+    raw: Readable.from([]),
     file: jest.fn().mockImplementation(async () => {
       await Promise.resolve();
       return partsData.find(p => p.type === 'file') ?? partsData[0];
@@ -99,6 +104,70 @@ describe('ImageProcessingController', () => {
     };
     return res;
   };
+
+  describe('processRaw', () => {
+    it('should accept application/octet-stream', async () => {
+      const req = {
+        headers: { 'content-type': 'application/octet-stream' },
+        raw: Readable.from([Buffer.from('test-data')]),
+      };
+      const res = mockRes();
+
+      const outputStream = Readable.from([Buffer.from('processed')]);
+      const processedResult = {
+        stream: outputStream,
+        mimeType: 'image/webp',
+        extension: 'webp',
+      };
+
+      jest.spyOn(imageProcessor, 'processStream').mockResolvedValue(processedResult as any);
+
+      await controller.processRaw(req as any, res as any);
+
+      expect(queueService.add).toHaveBeenCalled();
+      expect(imageProcessor.processStream).toHaveBeenCalledWith(
+        expect.any(Readable),
+        'application/octet-stream',
+        undefined,
+        undefined,
+      );
+      expect(res.type).toHaveBeenCalledWith('image/webp');
+      expect(res.send).toHaveBeenCalledWith(outputStream);
+    });
+
+    it('should reject unsupported content type', async () => {
+      const req = {
+        headers: { 'content-type': 'text/plain' },
+        raw: Readable.from([Buffer.from('x')]),
+      };
+      await expect(controller.processRaw(req as any, {} as any)).rejects.toThrow(
+        UnsupportedMediaTypeException,
+      );
+    });
+
+    it('should throw 413 when payload exceeds limit', async () => {
+      const req = {
+        headers: { 'content-type': 'image/jpeg' },
+        raw: Readable.from([Buffer.alloc(11 * 1024 * 1024)]),
+      };
+      const res = mockRes();
+
+      jest.spyOn(imageProcessor, 'processStream').mockImplementation(async (input: Readable) => {
+        for await (const _chunk of input) {
+          // drain
+        }
+        return {
+          stream: Readable.from([Buffer.from('processed')]),
+          mimeType: 'image/webp',
+          extension: 'webp',
+        } as any;
+      });
+
+      await expect(controller.processRaw(req as any, res as any)).rejects.toThrow(
+        PayloadTooLargeException,
+      );
+    });
+  });
 
   it('should be defined', () => {
     expect(controller).toBeDefined();
