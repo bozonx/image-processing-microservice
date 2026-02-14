@@ -12,7 +12,7 @@ import type { FastifyRequest, FastifyReply } from 'fastify';
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
 import { finished } from 'node:stream/promises';
-import { Readable } from 'node:stream';
+import { Readable, Transform } from 'node:stream';
 import { ImageProcessorService } from './services/image-processor.service.js';
 import { ExifService } from './services/exif.service.js';
 import { QueueService } from './services/queue.service.js';
@@ -33,6 +33,54 @@ export class ImageProcessingController {
     private readonly queueService: QueueService,
     private readonly configService: ConfigService,
   ) {}
+
+  private getHeaderValue(value: string | string[] | undefined): string | undefined {
+    if (!value) return undefined;
+    return Array.isArray(value) ? value[0] : value;
+  }
+
+  private async parseProcessParamsFromHeader(req: FastifyRequest): Promise<ProcessImageDto> {
+    const raw = this.getHeaderValue(req.headers['x-img-params']);
+    if (!raw) {
+      return new ProcessImageDto();
+    }
+
+    try {
+      const parsed = JSON.parse(raw);
+      const dto = plainToInstance(ProcessImageDto, parsed);
+
+      const errors = await validate(dto);
+      if (errors.length > 0) {
+        throw new BadRequestException(formatValidationErrors(errors));
+      }
+
+      return dto;
+    } catch (e) {
+      if (e instanceof BadRequestException) {
+        throw e;
+      }
+      const message = e instanceof Error ? e.message : 'Unknown error';
+      throw new BadRequestException(`Invalid x-img-params: ${message}`);
+    }
+  }
+
+  private createMaxBytesTransform(maxBytes?: number): Transform {
+    let totalLength = 0;
+
+    return new Transform({
+      transform(chunk, _encoding, callback) {
+        const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+        totalLength += buf.length;
+
+        if (typeof maxBytes === 'number' && totalLength > maxBytes) {
+          callback(new BadRequestException(`File size exceeds maximum ${maxBytes} bytes`));
+          return;
+        }
+
+        callback(null, buf);
+      },
+    });
+  }
 
   private getMaxBytes(): number | undefined {
     const config = this.configService.get<ImageConfig>('image');
@@ -163,6 +211,54 @@ export class ImageProcessingController {
       res.send(result.stream);
 
       // Wait until the response is completely sent to the client
+      await finished(res.raw);
+    }, priority);
+  }
+
+  @Post('process/raw')
+  @HttpCode(HttpStatus.OK)
+  public async processRaw(@Req() req: FastifyRequest, @Res() res: FastifyReply) {
+    const contentType = this.getHeaderValue(req.headers['content-type']);
+    const mimeType = contentType?.split(';')[0]?.trim();
+
+    if (!mimeType?.startsWith('image/')) {
+      throw new BadRequestException('Invalid content type, expected image/*');
+    }
+
+    const dto = await this.parseProcessParamsFromHeader(req);
+
+    if (dto.transform?.watermark) {
+      throw new BadRequestException('Watermark is not supported for this endpoint');
+    }
+
+    const priority = dto.priority ?? 2;
+
+    await this.queueService.add(async () => {
+      const limiter = this.createMaxBytesTransform(this.getMaxBytes());
+      const inputStream = (req.raw as unknown as Readable).pipe(limiter);
+
+      const result = await this.imageProcessor.processStream(
+        inputStream,
+        mimeType,
+        dto.transform,
+        dto.output,
+      );
+
+      res.type(result.mimeType);
+      res.header('Content-Disposition', `inline; filename="processed.${result.extension}"`);
+
+      result.stream.on('error', err => {
+        const message = err instanceof Error ? err.message : 'Unknown error';
+        try {
+          if (!res.raw.destroyed) {
+            res.raw.destroy(err instanceof Error ? err : new Error(message));
+          }
+        } catch {
+          // ignore
+        }
+      });
+
+      res.send(result.stream);
       await finished(res.raw);
     }, priority);
   }

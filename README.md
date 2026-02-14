@@ -237,6 +237,29 @@ curl -X POST http://localhost:8080/api/v1/process \
 
 ---
 
+### POST /api/v1/process/raw
+
+Эндпоинт для обработки изображений, принимающий **raw stream** (тело запроса = бинарные данные изображения). Параметры обработки передаются в заголовке `x-img-params`.
+
+**Ограничения:**
+
+| Параметр | Значение |
+| :--- | :--- |
+| `Content-Type` | **Обязательно.** Должен быть `image/*` (например, `image/jpeg`). |
+| `x-img-params` | **Опционально.** JSON строка с параметрами обработки (тот же формат, что и `params` в multipart). |
+| Watermark | **Не поддерживается** в этом эндпоинте. |
+
+**Пример запроса (cURL):**
+```bash
+curl -X POST http://localhost:8080/api/v1/process/raw \
+  -H 'Content-Type: image/jpeg' \
+  -H 'x-img-params: {"output":{"format":"webp","quality":85},"transform":{"resize":{"width":800}}}' \
+  --data-binary '@image.jpg' \
+  -o processed.webp
+```
+
+---
+
 ### POST /api/v1/exif
 
 Извлечение метаданных EXIF. Принимает файл через `multipart/form-data`.

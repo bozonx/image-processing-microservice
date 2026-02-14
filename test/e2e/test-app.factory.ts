@@ -49,6 +49,16 @@ export async function createTestApp(): Promise<NestFastifyApplication> {
       }),
     );
 
+  const fastify = app.getHttpAdapter().getInstance();
+
+  fastify.addContentTypeParser(/^image\/.+$/, (req, payload, done) => {
+    done(null, payload);
+  });
+
+  fastify.addContentTypeParser('application/octet-stream', (req, payload, done) => {
+    done(null, payload);
+  });
+
   await app.register(import('@fastify/multipart'), {
     limits: {
       fileSize: 25 * 1024 * 1024, // 25MB default for tests

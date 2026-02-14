@@ -82,6 +82,16 @@ async function bootstrap() {
       }),
     );
 
+  const fastify = app.getHttpAdapter().getInstance();
+
+  fastify.addContentTypeParser(/^image\/.+$/, (req, payload, done) => {
+    done(null, payload);
+  });
+
+  fastify.addContentTypeParser('application/octet-stream', (req, payload, done) => {
+    done(null, payload);
+  });
+
   // Register multipart support for streaming uploads
   await app.register(import('@fastify/multipart'), {
     limits: {

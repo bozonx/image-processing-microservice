@@ -132,6 +132,43 @@ describe('Image Processing (e2e)', () => {
     });
   });
 
+  describe('POST /api/v1/process/raw', () => {
+    it('should process a valid raw image stream with x-img-params header', async () => {
+      const inputBuffer = await sharp({
+        create: {
+          width: 100,
+          height: 100,
+          channels: 3,
+          background: { r: 0, g: 255, b: 0 },
+        },
+      })
+        .jpeg()
+        .toBuffer();
+
+      const params = JSON.stringify({
+        output: { format: 'webp', quality: 80 },
+      });
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/v1/process/raw',
+        headers: {
+          'Content-Type': 'image/jpeg',
+          'x-img-params': params,
+        },
+        payload: inputBuffer,
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.headers['content-type']).toBe('image/webp');
+
+      const metadata = await sharp(response.rawPayload).metadata();
+      expect(metadata.format).toBe('webp');
+      expect(metadata.width).toBe(100);
+      expect(metadata.height).toBe(100);
+    });
+  });
+
   describe('POST /api/v1/exif', () => {
     it('should extract metadata from an image stream', async () => {
       const inputBuffer = await sharp({
