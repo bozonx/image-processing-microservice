@@ -1,4 +1,4 @@
-ARG NODE_MAJOR=22
+ARG NODE_MAJOR=24
 
 # --- Build Stage ---
 FROM node:${NODE_MAJOR}-bookworm-slim AS builder
