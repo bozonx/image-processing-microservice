@@ -45,13 +45,18 @@ export class QueueService implements OnModuleDestroy {
    *
    * @param task - An async function representing the task to execute.
    * @param priority - Task priority (higher number = higher priority).
+   * @param signal - Optional AbortSignal to cancel the task while in queue.
    * @returns The result of the task execution.
    * @throws ServiceUnavailableException if the service is shutting down.
    * @throws RequestTimeoutException if the task (including wait time) exceeds requestTimeout.
    */
-  public async add<T>(task: () => Promise<T>, priority: number = 2): Promise<T> {
+  public async add<T>(task: () => Promise<T>, priority: number = 2, signal?: AbortSignal): Promise<T> {
     if (this.isShuttingDown) {
       throw new ServiceUnavailableException('Service is shutting down, rejecting new tasks');
+    }
+
+    if (signal?.aborted) {
+      throw new Error('Request aborted');
     }
 
     if (this.maxQueueSize > 0 && this.queue.size >= this.maxQueueSize) {
@@ -62,7 +67,7 @@ export class QueueService implements OnModuleDestroy {
     let timeoutHandle: NodeJS.Timeout | undefined;
 
     try {
-      const taskPromise = this.queue.add(task, { priority });
+      const taskPromise = this.queue.add(task, { priority, signal });
 
       // Create a timeout promise to reject if the total time exceeds requestTimeout
       const timeoutPromise = new Promise<never>((_, reject) => {
@@ -90,11 +95,16 @@ export class QueueService implements OnModuleDestroy {
     } catch (error) {
       const duration = Date.now() - startTime;
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      this.logger.error({
-        msg: 'Task failed',
-        duration,
-        error: errorMessage,
-      });
+
+      // Don't log abort errors as failures
+      if (errorMessage !== 'The operation was aborted' && errorMessage !== 'Request aborted') {
+        this.logger.error({
+          msg: 'Task failed',
+          duration,
+          error: errorMessage,
+        });
+      }
+
       throw error;
     } finally {
       if (timeoutHandle) {

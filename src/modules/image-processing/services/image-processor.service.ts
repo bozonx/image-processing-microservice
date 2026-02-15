@@ -44,6 +44,7 @@ export class ImageProcessorService {
     transform?: TransformDto,
     output?: OutputDto,
     watermark?: { buffer: Buffer; mimetype: string },
+    signal?: AbortSignal,
   ): Promise<StreamProcessResult> {
     if (!(mimeType.startsWith('image/') || mimeType === 'application/octet-stream')) {
       throw new BadRequestException(`Invalid MIME type: ${mimeType}`);
@@ -71,9 +72,32 @@ export class ImageProcessorService {
     // Pipe the input stream into the sharp pipeline (if not buffered for watermark)
     const resultStream = watermark && transform?.watermark ? pipeline : inputStream.pipe(pipeline);
 
+    if (signal) {
+      if (signal.aborted) {
+        if (!resultStream.destroyed) {
+          resultStream.destroy(new Error('Request aborted'));
+        }
+      } else {
+        signal.addEventListener(
+          'abort',
+          () => {
+            if (!resultStream.destroyed) {
+              resultStream.destroy(new Error('Request aborted'));
+            }
+          },
+          { once: true },
+        );
+      }
+    }
+
     // Propagate sharp errors to the returned stream to avoid silent truncation.
     // Controllers may then terminate the HTTP response with the underlying error.
     pipeline.on('error', err => {
+      // Don't log abort errors
+      if (err.message === 'The operation was aborted' || err.message === 'Request aborted') {
+        return;
+      }
+
       this.logger.error({
         msg: 'Sharp pipeline error',
         error: err.message,

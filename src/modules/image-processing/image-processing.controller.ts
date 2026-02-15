@@ -181,40 +181,67 @@ export class ImageProcessingController {
     const priority = dto.priority ?? 2;
 
     // Use queue to process the image and hold the slot until the response is finished
-    await this.queueService.add(async () => {
-      const result = await this.imageProcessor.processStream(
-        Readable.from(mainFileData.buffer),
-        mainFileData.mimetype,
-        dto.transform,
-        dto.output,
-        watermarkFileData
-          ? {
-              buffer: watermarkFileData.buffer,
-              mimetype: watermarkFileData.mimetype,
-            }
-          : undefined,
-      );
+    const abortController = new AbortController();
+    res.raw.on('close', () => {
+      // If the response is not finished, it means the client disconnected prematurely
+      if (!res.raw.writableEnded) {
+        abortController.abort();
+      }
+    });
 
-      res.type(result.mimeType);
-      res.header('Content-Disposition', `inline; filename="processed.${result.extension}"`);
-
-      result.stream.on('error', err => {
-        const message = err instanceof Error ? err.message : 'Unknown error';
-        try {
-          if (!res.raw.destroyed) {
-            res.raw.destroy(err instanceof Error ? err : new Error(message));
+    try {
+      await this.queueService.add(
+        async () => {
+          if (abortController.signal.aborted) {
+            throw new Error('Request aborted');
           }
-        } catch {
-          // ignore
-        }
-      });
 
-      // Pipe the sharp output to the response
-      res.send(result.stream);
+          const result = await this.imageProcessor.processStream(
+            Readable.from(mainFileData.buffer),
+            mainFileData.mimetype,
+            dto.transform,
+            dto.output,
+            watermarkFileData
+              ? {
+                  buffer: watermarkFileData.buffer,
+                  mimetype: watermarkFileData.mimetype,
+                }
+              : undefined,
+            abortController.signal,
+          );
 
-      // Wait until the response is completely sent to the client
-      await finished(res.raw);
-    }, priority);
+          res.type(result.mimeType);
+          res.header('Content-Disposition', `inline; filename="processed.${result.extension}"`);
+
+          result.stream.on('error', err => {
+            const message = err instanceof Error ? err.message : 'Unknown error';
+            try {
+              if (!res.raw.destroyed) {
+                res.raw.destroy(err instanceof Error ? err : new Error(message));
+              }
+            } catch {
+              // ignore
+            }
+          });
+
+          // Pipe the sharp output to the response
+          res.send(result.stream);
+
+          // Wait until the response is completely sent to the client
+          await finished(res.raw);
+        },
+        priority,
+        abortController.signal,
+      );
+    } catch (error) {
+      if (abortController.signal.aborted) {
+        // If aborted, we don't want to throw an internal server error if it was client disconnect
+        // But since we are in a controller, if we don't handle it, it bubbles up.
+        // NestJS might log it.
+        return;
+      }
+      throw error;
+    }
   }
 
   @Post('process/raw')
@@ -242,70 +269,92 @@ export class ImageProcessingController {
 
     const priority = dto.priority ?? 2;
 
-    await this.queueService.add(async () => {
-      const limiter = this.createMaxBytesTransform(this.getMaxBytes());
-      const inputStream = (req.raw as unknown as Readable).pipe(limiter);
+    const abortController = new AbortController();
+    await this.queueService.add(
+      async () => {
+        if (abortController.signal.aborted) {
+          throw new Error('Request aborted');
+        }
 
-      let resultStream: Readable | undefined;
+        const limiter = this.createMaxBytesTransform(this.getMaxBytes());
+        const inputStream = (req.raw as unknown as Readable).pipe(limiter);
 
-      const cleanup = (error?: Error) => {
-        try {
-          if (resultStream && !resultStream.destroyed) {
-            resultStream.destroy(error);
+        let resultStream: Readable | undefined;
+
+        const cleanup = (error?: Error) => {
+          abortController.abort();
+          try {
+            if (resultStream && !resultStream.destroyed) {
+              resultStream.destroy(error);
+            }
+          } catch {
+            // ignore
           }
-        } catch {
-          // ignore
-        }
+
+          try {
+            if (!inputStream.destroyed) {
+              inputStream.destroy(error);
+            }
+          } catch {
+            // ignore
+          }
+        };
+
+        const closeHandler = () => {
+          if (!res.raw.writableEnded && !res.raw.destroyed) {
+            cleanup(new Error('Client connection closed'));
+            return;
+          }
+          cleanup();
+        };
+
+        const errorHandler = (err: Error) => {
+          cleanup(err instanceof Error ? err : new Error('Response error'));
+        };
+
+        res.raw.once('close', closeHandler);
+        res.raw.once('error', errorHandler);
 
         try {
-          if (!inputStream.destroyed) {
-            inputStream.destroy(error);
-          }
-        } catch {
-          // ignore
+          const result = await this.imageProcessor.processStream(
+            inputStream,
+            acceptedMimeType,
+            dto.transform,
+            dto.output,
+            undefined,
+            abortController.signal,
+          );
+
+          resultStream = result.stream;
+
+          res.type(result.mimeType);
+          res.header('Content-Disposition', `inline; filename="processed.${result.extension}"`);
+
+          result.stream.on('error', err => {
+            const message = err instanceof Error ? err.message : 'Unknown error';
+            try {
+              if (!res.raw.destroyed) {
+                res.raw.destroy(err instanceof Error ? err : new Error(message));
+              }
+            } catch {
+              // ignore
+            }
+          });
+
+          res.send(result.stream);
+          await finished(res.raw);
+        } catch (err) {
+          // Clean up listeners if we error out
+          res.raw.removeListener('close', closeHandler);
+          res.raw.removeListener('error', errorHandler);
+          throw err;
+        } finally {
+          cleanup();
         }
-      };
-
-      res.raw.once('close', () => {
-        if (!res.raw.writableEnded && !res.raw.destroyed) {
-          cleanup(new Error('Client connection closed'));
-          return;
-        }
-
-        cleanup();
-      });
-
-      res.raw.once('error', err => {
-        cleanup(err instanceof Error ? err : new Error('Response error'));
-      });
-
-      const result = await this.imageProcessor.processStream(
-        inputStream,
-        acceptedMimeType,
-        dto.transform,
-        dto.output,
-      );
-
-      resultStream = result.stream;
-
-      res.type(result.mimeType);
-      res.header('Content-Disposition', `inline; filename="processed.${result.extension}"`);
-
-      result.stream.on('error', err => {
-        const message = err instanceof Error ? err.message : 'Unknown error';
-        try {
-          if (!res.raw.destroyed) {
-            res.raw.destroy(err instanceof Error ? err : new Error(message));
-          }
-        } catch {
-          // ignore
-        }
-      });
-
-      res.send(result.stream);
-      await finished(res.raw);
-      cleanup();
-    }, priority);
+      },
+      priority,
+      abortController.signal,
+    );
   }
 
   /**
@@ -316,7 +365,10 @@ export class ImageProcessingController {
    */
   @Post('exif')
   @HttpCode(HttpStatus.OK)
-  public async extractExif(@Req() req: FastifyRequest) {
+  public async extractExif(
+    @Req() req: FastifyRequest,
+    @Res({ passthrough: true }) res: FastifyReply,
+  ) {
     // Preliminary validation
     const contentType = req.headers['content-type'];
     if (!contentType?.includes('multipart/form-data')) {
@@ -354,10 +406,24 @@ export class ImageProcessingController {
     const buffer = await this.readStreamToBuffer(data.file, this.getMaxBytes());
     const priority = dto.priority ?? 2;
 
-    const result = await this.queueService.add(async () => {
-      const exif = await this.exifService.extract(Readable.from(buffer), data.mimetype);
-      return { exif };
-    }, priority);
+    const abortController = new AbortController();
+    req.raw.on('close', () => {
+      if (!res.raw.writableEnded) {
+        abortController.abort();
+      }
+    });
+
+    const result = await this.queueService.add(
+      async () => {
+        if (abortController.signal.aborted) {
+          throw new Error('Request aborted');
+        }
+        const exif = await this.exifService.extract(Readable.from(buffer), data.mimetype);
+        return { exif };
+      },
+      priority,
+      abortController.signal,
+    );
 
     return result;
   }

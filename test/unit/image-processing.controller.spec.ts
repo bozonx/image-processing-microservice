@@ -130,6 +130,8 @@ describe('ImageProcessingController', () => {
         'application/octet-stream',
         undefined,
         undefined,
+        undefined,
+        expect.any(AbortSignal),
       );
       expect(res.type).toHaveBeenCalledWith('image/webp');
       expect(res.send).toHaveBeenCalledWith(outputStream);
@@ -202,6 +204,7 @@ describe('ImageProcessingController', () => {
         undefined,
         undefined,
         undefined,
+        expect.any(AbortSignal),
       );
       expect(res.type).toHaveBeenCalledWith('image/webp');
       expect(res.send).toHaveBeenCalledWith(outputStream);
@@ -252,6 +255,7 @@ describe('ImageProcessingController', () => {
           buffer: Buffer.from('watermark-image'),
           mimetype: 'image/png',
         }),
+        expect.any(AbortSignal),
       );
     });
 
@@ -312,8 +316,9 @@ describe('ImageProcessingController', () => {
       const exifData = { Make: 'Canon' };
 
       jest.spyOn(exifService, 'extract').mockResolvedValue(exifData);
-
-      const result = await controller.extractExif(req as any);
+      
+      const res = mockRes();
+      const result = await controller.extractExif(req as any, res as any);
 
       expect(queueService.add).toHaveBeenCalled();
       expect(exifService.extract).toHaveBeenCalledWith(expect.any(Readable), file.mimetype);
