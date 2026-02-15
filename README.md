@@ -320,6 +320,7 @@ curl -X POST http://localhost:8080/api/v1/exif \
 - `LISTEN_HOST` - Хост для прослушивания (default: 0.0.0.0)
 - `LISTEN_PORT` - Порт сервиса (default: 8080)
 - `BASE_PATH` - Базовый путь для API (опционально)
+- `ENABLE_UI` - Включить Web UI (default: false)
 - `LOG_LEVEL` - Уровень логирования: `trace`, `debug`, `info`, `warn`, `error` (default: info)
 - `TZ` - Временная зона (default: UTC)
 - `FILE_MAX_BYTES_MB` - Максимальный размер входного файла в MB (default: 25)

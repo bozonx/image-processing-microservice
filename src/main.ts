@@ -74,7 +74,7 @@ async function bootstrap() {
       'onRequest',
       createAuthHook({
         basePath: appConfig.basePath,
-        uiPrefix: '/ui',
+        uiPrefix: appConfig.enableUi ? '/ui' : '/__ui_disabled__',
         apiPrefix: '/api/v1',
         basicUser,
         basicPass,
@@ -106,13 +106,15 @@ async function bootstrap() {
   // Register static files serving for UI
   const publicPath = join(__dirname, '..', '..', 'public');
   const uiPrefix = appConfig.basePath ? `/${appConfig.basePath}/ui` : '/ui';
-  await app.register(fastifyStatic, {
-    root: publicPath,
-    prefix: uiPrefix,
-    constraints: {},
-  });
+  if (appConfig.enableUi) {
+    await app.register(fastifyStatic, {
+      root: publicPath,
+      prefix: uiPrefix,
+      constraints: {},
+    });
 
-  logger.log(`📁 Serving static files from: ${publicPath}`, 'Bootstrap');
+    logger.log(`📁 Serving static files from: ${publicPath}`, 'Bootstrap');
+  }
 
   // Enable graceful shutdown
   app.enableShutdownHooks();
@@ -123,10 +125,12 @@ async function bootstrap() {
     `🚀 NestJS service is running on: http://${appConfig.host}:${appConfig.port}/${globalPrefix}`,
     'Bootstrap',
   );
-  logger.log(
-    `🖼️  UI available at: http://${appConfig.host}:${appConfig.port}${uiPrefix}`,
-    'Bootstrap',
-  );
+  if (appConfig.enableUi) {
+    logger.log(
+      `🖼️  UI available at: http://${appConfig.host}:${appConfig.port}${uiPrefix}`,
+      'Bootstrap',
+    );
+  }
   logger.log(`📊 Environment: ${appConfig.nodeEnv}`, 'Bootstrap');
   logger.log(`📝 Log level: ${appConfig.logLevel}`, 'Bootstrap');
   logger.log(`📦 Body limit: ${Math.round(bodyLimitBytes / 1024 / 1024)}MB`, 'Bootstrap');

@@ -1,8 +1,11 @@
 import { registerAs } from '@nestjs/config';
-import { IsInt, IsString, IsIn, Min, Max, validateSync } from 'class-validator';
+import { IsInt, IsString, IsIn, Min, Max, validateSync, IsBoolean } from 'class-validator';
 import { plainToClass } from 'class-transformer';
 
 export class AppConfig {
+  @IsBoolean()
+  public enableUi!: boolean;
+
   @IsInt()
   @Min(1)
   @Max(65535)
@@ -28,6 +31,7 @@ export class AppConfig {
 
 export default registerAs('app', (): AppConfig => {
   const config = plainToClass(AppConfig, {
+    enableUi: process.env.ENABLE_UI === 'true',
     port: parseInt(process.env.LISTEN_PORT ?? '8080', 10),
     host: process.env.LISTEN_HOST ?? '0.0.0.0',
     basePath: (process.env.BASE_PATH ?? '').replace(/^\/+|\/+$/g, ''),
