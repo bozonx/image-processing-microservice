@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable, Logger, PayloadTooLargeException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import sharp from 'sharp';
 import exifr from 'exifr';
 import { Readable } from 'node:stream';
 import type { ImageConfig } from '../../../config/image.config.js';
@@ -41,6 +42,13 @@ export class ExifService {
       }
 
       const buffer = Buffer.concat(chunks);
+      const metadata = await sharp(buffer).metadata().catch(err => {
+        this.logger.warn(`Sharp metadata extraction failed: ${err.message}`, {
+          bufferSize: buffer.length,
+          mimeType
+        });
+        throw err;
+      });
 
       // Check MIME type
       if (!mimeType.startsWith('image/')) {
@@ -57,13 +65,19 @@ export class ExifService {
       const duration = Date.now() - startTime;
 
       this.logger.debug({
-        msg: 'EXIF extracted',
+        msg: 'EXIF and metadata extracted',
         duration,
         hasExif: !!exifData,
         sizeBytes: buffer.length,
+        width: metadata.width,
+        height: metadata.height,
       });
 
-      return exifData ?? null;
+      return {
+        ...(exifData || {}),
+        width: metadata.width,
+        height: metadata.height,
+      };
     } catch (error) {
       const duration = Date.now() - startTime;
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';

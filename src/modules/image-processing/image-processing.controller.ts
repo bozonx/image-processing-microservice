@@ -418,8 +418,12 @@ export class ImageProcessingController {
         if (abortController.signal.aborted) {
           throw new Error('Request aborted');
         }
-        const exif = await this.exifService.extract(Readable.from(buffer), data.mimetype);
-        return { exif };
+        const result = (await this.exifService.extract(
+          Readable.from(buffer),
+          data.mimetype,
+        )) as any;
+        const { width, height, ...exif } = result || {};
+        return { exif: Object.keys(exif).length > 0 ? exif : null, width, height };
       },
       priority,
       abortController.signal,
