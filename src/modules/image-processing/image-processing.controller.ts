@@ -212,20 +212,12 @@ export class ImageProcessingController {
 
           res.type(result.mimeType);
           res.header('Content-Disposition', `inline; filename="processed.${result.extension}"`);
+          res.header('X-Image-Width', result.width.toString());
+          res.header('X-Image-Height', result.height.toString());
+          res.header('X-Image-Size', result.size.toString());
+          res.header('Content-Length', result.size.toString());
 
-          result.stream.on('error', err => {
-            const message = err instanceof Error ? err.message : 'Unknown error';
-            try {
-              if (!res.raw.destroyed) {
-                res.raw.destroy(err instanceof Error ? err : new Error(message));
-              }
-            } catch {
-              // ignore
-            }
-          });
-
-          // Pipe the sharp output to the response
-          res.send(result.stream);
+          res.send(result.buffer);
 
           // Wait until the response is completely sent to the client
           await finished(res.raw);
@@ -325,23 +317,14 @@ export class ImageProcessingController {
             abortController.signal,
           );
 
-          resultStream = result.stream;
-
           res.type(result.mimeType);
           res.header('Content-Disposition', `inline; filename="processed.${result.extension}"`);
+          res.header('X-Image-Width', result.width.toString());
+          res.header('X-Image-Height', result.height.toString());
+          res.header('X-Image-Size', result.size.toString());
+          res.header('Content-Length', result.size.toString());
 
-          result.stream.on('error', err => {
-            const message = err instanceof Error ? err.message : 'Unknown error';
-            try {
-              if (!res.raw.destroyed) {
-                res.raw.destroy(err instanceof Error ? err : new Error(message));
-              }
-            } catch {
-              // ignore
-            }
-          });
-
-          res.send(result.stream);
+          res.send(result.buffer);
           await finished(res.raw);
         } catch (err) {
           // Clean up listeners if we error out

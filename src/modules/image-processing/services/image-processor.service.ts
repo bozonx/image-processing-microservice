@@ -5,10 +5,13 @@ import { Readable } from 'node:stream';
 import { TransformDto, OutputDto, WatermarkDto } from '../dto/process-image.dto.js';
 import type { ImageDefaults, ImageConfig } from '../../../config/image.config.js';
 
-interface StreamProcessResult {
-  stream: Readable;
+interface ProcessResult {
+  buffer: Buffer;
   mimeType: string;
   extension: string;
+  width: number;
+  height: number;
+  size: number;
 }
 
 /**
@@ -45,57 +48,67 @@ export class ImageProcessorService {
     output?: OutputDto,
     watermark?: { buffer: Buffer; mimetype: string },
     signal?: AbortSignal,
-  ): Promise<StreamProcessResult> {
+  ): Promise<ProcessResult> {
     if (!(mimeType.startsWith('image/') || mimeType === 'application/octet-stream')) {
       throw new BadRequestException(`Invalid MIME type: ${mimeType}`);
     }
 
     const options = this.getSharpOptions(mimeType);
-    // failOnError: false allows processing of "corrupt" images that are mostly valid
     let pipeline = sharp({ ...options, failOnError: false });
 
     pipeline = this.applyTransformations(pipeline, transform);
 
-    // Apply watermark if provided
     if (watermark && transform?.watermark) {
-      // We need to get metadata first, so we'll buffer the input
       const inputBuffer = await this.streamToBuffer(inputStream);
       pipeline = sharp(inputBuffer, { ...options, failOnError: false });
       pipeline = this.applyTransformations(pipeline, transform);
 
       const metadata = await pipeline.metadata();
       await this.applyWatermark(pipeline, watermark.buffer, transform.watermark, metadata);
+    } else {
+      inputStream.pipe(pipeline);
     }
 
     pipeline = this.applyOutputFormat(pipeline, output);
 
-    // Pipe the input stream into the sharp pipeline (if not buffered for watermark)
-    const resultStream = watermark && transform?.watermark ? pipeline : inputStream.pipe(pipeline);
+    const format = output?.format ?? this.defaults.format;
+    const isRaw = format === 'raw';
 
     if (signal) {
       if (signal.aborted) {
-        if (!resultStream.destroyed) {
-          resultStream.destroy(new Error('Request aborted'));
-        }
-      } else {
-        signal.addEventListener(
-          'abort',
-          () => {
-            if (!resultStream.destroyed) {
-              resultStream.destroy(new Error('Request aborted'));
-            }
-          },
-          { once: true },
-        );
+        throw new Error('Request aborted');
       }
+      signal.addEventListener(
+        'abort',
+        () => {
+          pipeline.destroy();
+        },
+        { once: true },
+      );
     }
 
-    // Propagate sharp errors to the returned stream to avoid silent truncation.
-    // Controllers may then terminate the HTTP response with the underlying error.
-    pipeline.on('error', err => {
-      // Don't log abort errors
+    try {
+      const { data, info } = await pipeline.toBuffer({ resolveWithObject: true });
+
+      this.logger.log({
+        msg: 'Image processing finished',
+        format,
+        width: info.width,
+        height: info.height,
+        size: info.size,
+      });
+
+      return {
+        buffer: data,
+        mimeType: isRaw ? 'application/octet-stream' : `image/${format}`,
+        extension: format,
+        width: info.width,
+        height: info.height,
+        size: info.size,
+      };
+    } catch (err) {
       if (err.message === 'The operation was aborted' || err.message === 'Request aborted') {
-        return;
+        throw err;
       }
 
       this.logger.error({
@@ -104,31 +117,8 @@ export class ImageProcessorService {
         stack: err.stack,
       });
 
-      try {
-        if (!resultStream.destroyed) {
-          resultStream.destroy(err);
-        }
-      } catch {
-        // ignore
-      }
-    });
-
-    const format = output?.format ?? this.defaults.format;
-
-    this.logger.log({
-      msg: 'Image stream processing started',
-      format,
-      mimeType,
-      hasWatermark: !!(watermark && transform?.watermark),
-    });
-
-    const isRaw = format === 'raw';
-
-    return {
-      stream: resultStream,
-      mimeType: isRaw ? 'application/octet-stream' : `image/${format}`,
-      extension: format,
-    };
+      throw err;
+    }
   }
 
   /**
