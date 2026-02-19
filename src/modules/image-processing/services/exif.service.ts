@@ -47,13 +47,16 @@ export class ExifService {
       }
 
       const buffer = Buffer.concat(chunks);
-      const metadata = await sharp(buffer).metadata().catch(err => {
-        this.logger.warn(`Sharp metadata extraction failed: ${err.message}`, {
-          bufferSize: buffer.length,
-          mimeType,
+      const metadata = await sharp(buffer)
+        .metadata()
+        .catch(err => {
+          const message = err instanceof Error ? err.message : String(err);
+          this.logger.warn(`Sharp metadata extraction failed: ${message}`, {
+            bufferSize: buffer.length,
+            mimeType,
+          });
+          throw err;
         });
-        throw err;
-      });
 
       // parse() returns data or undefined if nothing found
       const exifData = await exifr.parse(buffer, {

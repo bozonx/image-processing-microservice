@@ -107,14 +107,15 @@ export class ImageProcessorService {
         size: info.size,
       };
     } catch (err) {
-      if (err.message === 'The operation was aborted' || err.message === 'Request aborted') {
+      const error = err instanceof Error ? err : new Error(String(err));
+      if (error.message === 'The operation was aborted' || error.message === 'Request aborted') {
         throw err;
       }
 
       this.logger.error({
         msg: 'Sharp pipeline error',
-        error: err.message,
-        stack: err.stack,
+        error: error.message,
+        stack: error.stack,
       });
 
       throw err;
