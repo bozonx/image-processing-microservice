@@ -41,19 +41,19 @@ export class ExifService {
         chunks.push(Buffer.from(chunk));
       }
 
+      // Check MIME type first
+      if (!mimeType.startsWith('image/')) {
+        throw new BadRequestException(`Invalid MIME type: ${mimeType}`);
+      }
+
       const buffer = Buffer.concat(chunks);
       const metadata = await sharp(buffer).metadata().catch(err => {
         this.logger.warn(`Sharp metadata extraction failed: ${err.message}`, {
           bufferSize: buffer.length,
-          mimeType
+          mimeType,
         });
         throw err;
       });
-
-      // Check MIME type
-      if (!mimeType.startsWith('image/')) {
-        throw new BadRequestException(`Invalid MIME type: ${mimeType}`);
-      }
 
       // parse() returns data or undefined if nothing found
       const exifData = await exifr.parse(buffer, {

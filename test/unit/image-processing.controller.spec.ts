@@ -113,11 +113,14 @@ describe('ImageProcessingController', () => {
       };
       const res = mockRes();
 
-      const outputStream = Readable.from([Buffer.from('processed')]);
+      const buffer = Buffer.from('processed');
       const processedResult = {
-        stream: outputStream,
+        buffer,
         mimeType: 'image/webp',
         extension: 'webp',
+        width: 100,
+        height: 100,
+        size: buffer.length,
       };
 
       jest.spyOn(imageProcessor, 'processStream').mockResolvedValue(processedResult as any);
@@ -134,7 +137,7 @@ describe('ImageProcessingController', () => {
         expect.any(AbortSignal),
       );
       expect(res.type).toHaveBeenCalledWith('image/webp');
-      expect(res.send).toHaveBeenCalledWith(outputStream);
+      expect(res.send).toHaveBeenCalledWith(processedResult.buffer);
     });
 
     it('should reject unsupported content type', async () => {
@@ -158,10 +161,17 @@ describe('ImageProcessingController', () => {
         for await (const _chunk of input) {
           // drain
         }
+        const buffer = Buffer.from('processed');
         return {
-          stream: Readable.from([Buffer.from('processed')]),
+          buffer,
           mimeType: 'image/webp',
           extension: 'webp',
+        width: 100,
+        height: 100,
+        size: buffer.length,
+          width: 100,
+          height: 100,
+          size: buffer.length,
         } as any;
       });
 
@@ -186,11 +196,14 @@ describe('ImageProcessingController', () => {
 
       const req = mockReq([filePart]);
       const res = mockRes();
-      const outputStream = Readable.from([Buffer.from('processed')]);
+      const buffer = Buffer.from('processed');
       const processedResult = {
-        stream: outputStream,
+        buffer,
         mimeType: 'image/webp',
         extension: 'webp',
+        width: 100,
+        height: 100,
+        size: buffer.length,
       };
 
       jest.spyOn(imageProcessor, 'processStream').mockResolvedValue(processedResult as any);
@@ -207,7 +220,7 @@ describe('ImageProcessingController', () => {
         expect.any(AbortSignal),
       );
       expect(res.type).toHaveBeenCalledWith('image/webp');
-      expect(res.send).toHaveBeenCalledWith(outputStream);
+      expect(res.send).toHaveBeenCalledWith(processedResult.buffer);
     });
 
     it('should handle watermark and params', async () => {
@@ -235,11 +248,17 @@ describe('ImageProcessingController', () => {
 
       const req = mockReq([filePart, watermarkPart, paramsPart]);
       const res = mockRes();
-      const outputStream = Readable.from([Buffer.from('processed')]);
+      const buffer = Buffer.from('processed');
       const processedResult = {
-        stream: outputStream,
+        buffer,
         mimeType: 'image/webp',
         extension: 'webp',
+        width: 100,
+        height: 100,
+        size: buffer.length,
+        width: 100,
+        height: 100,
+        size: buffer.length,
       };
 
       jest.spyOn(imageProcessor, 'processStream').mockResolvedValue(processedResult as any);
@@ -322,7 +341,7 @@ describe('ImageProcessingController', () => {
 
       expect(queueService.add).toHaveBeenCalled();
       expect(exifService.extract).toHaveBeenCalledWith(expect.any(Readable), file.mimetype);
-      expect(result).toEqual({ exif: exifData });
+      expect(result).toEqual({ exif: exifData, width: undefined, height: undefined });
     });
   });
 });

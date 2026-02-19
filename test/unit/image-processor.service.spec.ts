@@ -50,11 +50,7 @@ describe('ImageProcessorService', () => {
       watermark,
     );
 
-    const chunks: Buffer[] = [];
-    for await (const chunk of result.stream) {
-      chunks.push(Buffer.from(chunk));
-    }
-    const resultBuffer = Buffer.concat(chunks);
+    const resultBuffer = result.buffer;
     const metadata = await sharp(resultBuffer).metadata();
 
     return {
@@ -383,11 +379,7 @@ describe('ImageProcessorService', () => {
     const stream = bufferToStream(inputBuffer);
     const result = await service.processStream(stream, 'image/jpeg', {}, { format: 'raw' as any });
 
-    const chunks: Buffer[] = [];
-    for await (const chunk of result.stream) {
-      chunks.push(Buffer.from(chunk));
-    }
-    const resultBuffer = Buffer.concat(chunks);
+    const resultBuffer = result.buffer;
 
     expect(result.mimeType).toBe('application/octet-stream');
     expect(result.extension).toBe('raw');
@@ -663,17 +655,8 @@ describe('ImageProcessorService', () => {
       const emptyStream = new Readable();
       emptyStream.push(null);
 
-      // The service returns a stream, the error happens when reading it
-      // we use processWrapper logic (simplified) to consume it
-      const result = await service.processStream(emptyStream, 'image/jpeg', {}, {});
-
-      const consumeStream = async () => {
-        for await (const _chunk of result.stream) {
-          // just consume
-        }
-      };
-
-      await expect(consumeStream()).rejects.toThrow();
+      // The service now awaits toBuffer(), so it throws immediately if stream is empty
+      await expect(service.processStream(emptyStream, 'image/jpeg', {}, {})).rejects.toThrow();
     });
 
     it('should handle corrupt image data', async () => {
