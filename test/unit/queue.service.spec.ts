@@ -73,17 +73,17 @@ describe('QueueService', () => {
     const blocker = new Promise<void>(resolve => setTimeout(resolve, 50));
     void service.add(() => blocker.then(() => void results.push('blocker')));
 
-    // Add low priority task
+    // Add low priority task (2 = low internal priority)
     void service.add(() => {
       results.push('low');
       return Promise.resolve('low');
-    }, 0);
+    }, 2);
 
-    // Add high priority task
+    // Add high priority task (0 = high internal priority)
     void service.add(() => {
       results.push('high');
       return Promise.resolve('high');
-    }, 10);
+    }, 0);
 
     // Wait for everything
     await new Promise(resolve => setTimeout(resolve, 100));

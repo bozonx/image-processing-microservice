@@ -348,70 +348,89 @@ export class ImageProcessingController {
    */
   @Post('exif')
   @HttpCode(HttpStatus.OK)
-  public async extractExif(
-    @Req() req: FastifyRequest,
-    @Res({ passthrough: true }) res: FastifyReply,
-  ) {
+  public async extractExif(@Req() req: FastifyRequest, @Res() res: FastifyReply) {
     // Preliminary validation
     const contentType = req.headers['content-type'];
     if (!contentType?.includes('multipart/form-data')) {
       throw new BadRequestException('Invalid content type, expected multipart/form-data');
     }
 
-    const data = await req.file();
-    if (!data) {
+    const parts = req.parts();
+    let fileData: { buffer: Buffer; mimetype: string } | null = null;
+    let dto = new ExtractExifDto();
+
+    try {
+      for await (const part of parts) {
+        if (part.type === 'file' && part.fieldname === 'file') {
+          const buffer = await this.readStreamToBuffer(part.file, this.getMaxBytes());
+          fileData = { buffer, mimetype: part.mimetype };
+        } else if (part.type === 'field' && part.fieldname === 'params') {
+          try {
+            const fieldValue = part.value as string;
+            const parsed = JSON.parse(fieldValue);
+            dto = plainToInstance(ExtractExifDto, parsed);
+
+            const errors = await validate(dto);
+            if (errors.length > 0) {
+              throw new BadRequestException(formatValidationErrors(errors));
+            }
+          } catch (e) {
+            const message = e instanceof Error ? e.message : 'Unknown error';
+            throw new BadRequestException(`Invalid params: ${message}`);
+          }
+        }
+      }
+    } catch (error) {
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      throw new BadRequestException(`Failed to process multipart payload: ${message}`);
+    }
+
+    if (!fileData) {
       throw new BadRequestException('No file uploaded');
     }
 
-    // Parse params from form field to get priority if provided
-    let dto = new ExtractExifDto();
-    const paramsField = data.fields['params'];
-    const paramValue =
-      paramsField && !Array.isArray(paramsField) && paramsField.type === 'field'
-        ? (paramsField as any).value
-        : undefined;
-
-    if (paramValue) {
-      try {
-        const parsed = JSON.parse(paramValue as string);
-        dto = plainToInstance(ExtractExifDto, parsed);
-        const errors = await validate(dto);
-        if (errors.length > 0) {
-          throw new BadRequestException(formatValidationErrors(errors));
-        }
-      } catch (e) {
-        const message = e instanceof Error ? e.message : 'Unknown error';
-        throw new BadRequestException(`Invalid params: ${message}`);
-      }
-    }
-
-    // Buffer for backpressure
-    const buffer = await this.readStreamToBuffer(data.file, this.getMaxBytes());
     const priority = dto.priority ?? 2;
-
     const abortController = new AbortController();
-    req.raw.on('close', () => {
+
+    res.raw.on('close', () => {
       if (!res.raw.writableEnded) {
         abortController.abort();
       }
     });
 
-    const result = await this.queueService.add(
-      async () => {
-        if (abortController.signal.aborted) {
-          throw new Error('Request aborted');
-        }
-        const result = (await this.exifService.extract(
-          Readable.from(buffer),
-          data.mimetype,
-        )) as any;
-        const { width, height, ...exif } = result || {};
-        return { exif: Object.keys(exif).length > 0 ? exif : null, width, height };
-      },
-      priority,
-      abortController.signal,
-    );
+    try {
+      const result = await this.queueService.add(
+        async () => {
+          if (abortController.signal.aborted) {
+            throw new Error('Request aborted');
+          }
 
-    return result;
+          const rawExif = (await this.exifService.extract(fileData!.buffer, fileData!.mimetype)) as any;
+
+          const { width, height, ...exif } = rawExif || {};
+          const responseBody = {
+            exif: Object.keys(exif).length > 0 ? exif : null,
+            width,
+            height,
+          };
+
+          res.send(responseBody);
+          await finished(res.raw);
+          return responseBody;
+        },
+        priority,
+        abortController.signal,
+      );
+
+      return result;
+    } catch (error) {
+      if (abortController.signal.aborted) {
+        return;
+      }
+      throw error;
+    }
   }
 }

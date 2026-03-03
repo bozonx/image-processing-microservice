@@ -326,12 +326,13 @@ describe('ImageProcessingController', () => {
 
   describe('extractExif', () => {
     it('should call exifService.extract and return result', async () => {
-      const file = {
+      const filePart = {
+        type: 'file',
+        fieldname: 'file',
         mimetype: 'image/jpeg',
         file: Readable.from([Buffer.from('test-data')]),
-        fields: {},
       };
-      const req = mockReq([file]);
+      const req = mockReq([filePart]);
       const exifData = { Make: 'Canon' };
 
       jest.spyOn(exifService, 'extract').mockResolvedValue(exifData);
@@ -340,7 +341,7 @@ describe('ImageProcessingController', () => {
       const result = await controller.extractExif(req as any, res as any);
 
       expect(queueService.add).toHaveBeenCalled();
-      expect(exifService.extract).toHaveBeenCalledWith(expect.any(Readable), file.mimetype);
+      expect(exifService.extract).toHaveBeenCalledWith(Buffer.from('test-data'), filePart.mimetype);
       expect(result).toEqual({ exif: exifData, width: undefined, height: undefined });
     });
   });

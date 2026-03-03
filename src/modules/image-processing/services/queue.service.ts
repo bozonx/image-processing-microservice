@@ -66,8 +66,11 @@ export class QueueService implements OnModuleDestroy {
     const startTime = Date.now();
     let timeoutHandle: NodeJS.Timeout | undefined;
 
+    // Mapping user priority (0-high, 2-low) to p-queue priority (high numbers run first)
+    const internalPriority = 2 - Math.max(0, Math.min(2, priority));
+
     try {
-      const taskPromise = this.queue.add(task, { priority, signal });
+      const taskPromise = this.queue.add(task, { priority: internalPriority, signal });
 
       // Create a timeout promise to reject if the total time exceeds requestTimeout
       const timeoutPromise = new Promise<never>((_, reject) => {

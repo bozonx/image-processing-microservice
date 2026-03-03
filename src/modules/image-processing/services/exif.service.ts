@@ -19,26 +19,35 @@ export class ExifService {
   }
 
   /**
-   * Extracts EXIF metadata from an image stream.
-   * Note: This method buffers the entire stream into memory because exifr requires a buffer.
+   * Extracts EXIF metadata from image data.
    *
-   * @param stream - The image data stream.
+   * @param input - The image data (Buffer or Stream).
    * @param mimeType - The MIME type of the image.
    * @returns A record of EXIF data or null if extraction fails or no data is found.
    */
-  public async extract(stream: Readable, mimeType: string): Promise<Record<string, any> | null> {
+  public async extract(
+    input: Readable | Buffer,
+    mimeType: string,
+  ): Promise<Record<string, any> | null> {
     const startTime = Date.now();
 
     try {
-      const chunks: Buffer[] = [];
-      let totalLength = 0;
+      let buffer: Buffer;
 
-      for await (const chunk of stream) {
-        totalLength += chunk.length;
-        if (totalLength > this.maxBytes) {
-          throw new PayloadTooLargeException(`Image size exceeds maximum ${this.maxBytes} bytes`);
+      if (Buffer.isBuffer(input)) {
+        buffer = input;
+      } else {
+        const chunks: Buffer[] = [];
+        let totalLength = 0;
+
+        for await (const chunk of input) {
+          totalLength += chunk.length;
+          if (totalLength > this.maxBytes) {
+            throw new PayloadTooLargeException(`Image size exceeds maximum ${this.maxBytes} bytes`);
+          }
+          chunks.push(Buffer.from(chunk));
         }
-        chunks.push(Buffer.from(chunk));
+        buffer = Buffer.concat(chunks);
       }
 
       // Check MIME type first
@@ -46,7 +55,6 @@ export class ExifService {
         throw new BadRequestException(`Invalid MIME type: ${mimeType}`);
       }
 
-      const buffer = Buffer.concat(chunks);
       const metadata = await sharp(buffer)
         .metadata()
         .catch(err => {
