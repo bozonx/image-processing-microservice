@@ -262,82 +262,88 @@ export class ImageProcessingController {
     const priority = dto.priority ?? 2;
 
     const abortController = new AbortController();
-    await this.queueService.add(
-      async () => {
-        if (abortController.signal.aborted) {
-          throw new Error('Request aborted');
-        }
 
-        const limiter = this.createMaxBytesTransform(this.getMaxBytes());
-        const inputStream = (req.raw as unknown as Readable).pipe(limiter);
+    try {
+      await this.queueService.add(
+        async () => {
+          if (abortController.signal.aborted) {
+            throw new Error('Request aborted');
+          }
 
-        let resultStream: Readable | undefined;
+          const limiter = this.createMaxBytesTransform(this.getMaxBytes());
+          const inputStream = (req.raw as unknown as Readable).pipe(limiter);
 
-        const cleanup = (error?: Error) => {
-          abortController.abort();
-          try {
-            if (resultStream && !resultStream.destroyed) {
-              resultStream.destroy(error);
+          let resultStream: Readable | undefined;
+
+          const cleanup = (error?: Error) => {
+            try {
+              if (resultStream && !resultStream.destroyed) {
+                resultStream.destroy(error);
+              }
+            } catch {
+              // ignore
             }
-          } catch {
-            // ignore
-          }
+
+            try {
+              if (!inputStream.destroyed) {
+                inputStream.destroy(error);
+              }
+            } catch {
+              // ignore
+            }
+          };
+
+          const closeHandler = () => {
+            if (!res.raw.writableEnded && !res.raw.destroyed) {
+              abortController.abort();
+              cleanup(new Error('Client connection closed'));
+              return;
+            }
+            cleanup();
+          };
+
+          const errorHandler = (err: Error) => {
+            abortController.abort();
+            cleanup(err instanceof Error ? err : new Error('Response error'));
+          };
+
+          res.raw.once('close', closeHandler);
+          res.raw.once('error', errorHandler);
 
           try {
-            if (!inputStream.destroyed) {
-              inputStream.destroy(error);
-            }
-          } catch {
-            // ignore
+            const result = await this.imageProcessor.processStream(
+              inputStream,
+              acceptedMimeType,
+              dto.transform,
+              dto.output,
+              undefined,
+              abortController.signal,
+            );
+
+            res.type(result.mimeType);
+            res.header('Content-Disposition', `inline; filename="processed.${result.extension}"`);
+            res.header('X-Image-Width', result.width.toString());
+            res.header('X-Image-Height', result.height.toString());
+            res.header('X-Image-Size', result.size.toString());
+            res.header('Content-Length', result.size.toString());
+
+            res.send(result.buffer);
+            await finished(res.raw);
+          } finally {
+            res.raw.removeListener('close', closeHandler);
+            res.raw.removeListener('error', errorHandler);
+            cleanup();
           }
-        };
-
-        const closeHandler = () => {
-          if (!res.raw.writableEnded && !res.raw.destroyed) {
-            cleanup(new Error('Client connection closed'));
-            return;
-          }
-          cleanup();
-        };
-
-        const errorHandler = (err: Error) => {
-          cleanup(err instanceof Error ? err : new Error('Response error'));
-        };
-
-        res.raw.once('close', closeHandler);
-        res.raw.once('error', errorHandler);
-
-        try {
-          const result = await this.imageProcessor.processStream(
-            inputStream,
-            acceptedMimeType,
-            dto.transform,
-            dto.output,
-            undefined,
-            abortController.signal,
-          );
-
-          res.type(result.mimeType);
-          res.header('Content-Disposition', `inline; filename="processed.${result.extension}"`);
-          res.header('X-Image-Width', result.width.toString());
-          res.header('X-Image-Height', result.height.toString());
-          res.header('X-Image-Size', result.size.toString());
-          res.header('Content-Length', result.size.toString());
-
-          res.send(result.buffer);
-          await finished(res.raw);
-        } catch (err) {
-          // Clean up listeners if we error out
-          res.raw.removeListener('close', closeHandler);
-          res.raw.removeListener('error', errorHandler);
-          throw err;
-        } finally {
-          cleanup();
-        }
-      },
-      priority,
-      abortController.signal,
-    );
+        },
+        priority,
+        abortController.signal,
+      );
+    } catch (error) {
+      if (abortController.signal.aborted) {
+        return;
+      }
+      throw error;
+    }
   }
 
   /**

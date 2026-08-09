@@ -70,6 +70,11 @@
   "pnpm": {
     "overrides": {
       "fastify": "5.7.1"
-    }
+    },
+    "onlyBuiltDependencies": [
+      "@nestjs/core",
+      "sharp",
+      "unrs-resolver"
+    ]
   }
 }

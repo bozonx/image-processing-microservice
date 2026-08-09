@@ -150,6 +150,66 @@ describe('ImageProcessingController', () => {
       );
     });
 
+    it('should propagate original error when processStream fails (not mask as abort)', async () => {
+      const req = {
+        headers: { 'content-type': 'image/jpeg' },
+        raw: Readable.from([Buffer.from('corrupt-image-data')]),
+      };
+      const res = mockRes();
+
+      const originalError = new Error('Input buffer contains unsupported image format');
+      jest.spyOn(imageProcessor, 'processStream').mockRejectedValue(originalError);
+
+      await expect(controller.processRaw(req as any, res as any)).rejects.toThrow(
+        'Input buffer contains unsupported image format',
+      );
+    });
+
+    it('should silently handle abort when client disconnects', async () => {
+      const req = {
+        headers: { 'content-type': 'image/jpeg' },
+        raw: Readable.from([Buffer.from('test-data')]),
+      };
+      const res = mockRes();
+
+      // Simulate p-queue behavior: reject with abort error when signal aborts
+      jest.spyOn(queueService, 'add').mockImplementation(async (task: () => Promise<any>, _priority?: number, signal?: AbortSignal) => {
+        if (signal?.aborted) {
+          throw new Error('The operation was aborted');
+        }
+        return new Promise((resolve, reject) => {
+          signal?.addEventListener('abort', () => {
+            reject(new Error('The operation was aborted'));
+          }, { once: true });
+          task().then(resolve, reject);
+        });
+      });
+
+      // Simulate client disconnect by aborting after a tick
+      jest.spyOn(imageProcessor, 'processStream').mockImplementation(async (_input, _mime, _t, _o, _w, signal) => {
+        // Wait a tick so the abort can fire
+        await new Promise(r => setTimeout(r, 10));
+        if (signal?.aborted) {
+          throw new Error('Request aborted');
+        }
+        return {
+          buffer: Buffer.from('processed'),
+          mimeType: 'image/webp',
+          extension: 'webp',
+          width: 100,
+          height: 100,
+          size: 9,
+        } as any;
+      });
+
+      // Trigger abort by emitting 'close' on res.raw before processing completes
+      setTimeout(() => {
+        res.raw.emit('close');
+      }, 5);
+
+      await expect(controller.processRaw(req as any, res as any)).resolves.toBeUndefined();
+    });
+
     it('should throw 413 when payload exceeds limit', async () => {
       const req = {
         headers: { 'content-type': 'image/jpeg' },
@@ -166,9 +226,6 @@ describe('ImageProcessingController', () => {
           buffer,
           mimeType: 'image/webp',
           extension: 'webp',
-        width: 100,
-        height: 100,
-        size: buffer.length,
           width: 100,
           height: 100,
           size: buffer.length,
@@ -253,9 +310,6 @@ describe('ImageProcessingController', () => {
         buffer,
         mimeType: 'image/webp',
         extension: 'webp',
-        width: 100,
-        height: 100,
-        size: buffer.length,
         width: 100,
         height: 100,
         size: buffer.length,
