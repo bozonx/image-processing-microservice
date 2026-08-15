@@ -83,6 +83,7 @@ async function bootstrap() {
         basicUser,
         basicPass,
         bearerTokens,
+        publicPaths: ['/api/v1/health'],
       }),
     );
 

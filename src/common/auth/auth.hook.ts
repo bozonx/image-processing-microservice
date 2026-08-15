@@ -7,6 +7,7 @@ export interface AuthHookOptions {
   basicUser?: string;
   basicPass?: string;
   bearerTokens: string[];
+  publicPaths?: string[];
 }
 
 function normalizeBasePath(basePath: string): string {
@@ -85,6 +86,10 @@ export function createAuthHook(options: AuthHookOptions) {
     if (!anyAuthEnabled) return;
 
     const url = req.raw.url ?? '';
+    const pathname = url.split('?', 1)[0];
+    if (options.publicPaths?.some(path => pathname === buildPrefixedPath(options.basePath, path))) {
+      return;
+    }
 
     const isApi = url.startsWith(apiPrefix);
     const isUi = url.startsWith(uiPrefix);

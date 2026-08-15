@@ -5,6 +5,7 @@ import { ConfigService } from '@nestjs/config';
 import { AppModule } from '../../src/app.module.js';
 import type { AuthConfig } from '../../src/config/auth.config.js';
 import { createAuthHook } from '../../src/common/auth/auth.hook.js';
+import { buildApiPrefix } from '../../src/common/http/api-prefix.js';
 
 export async function createTestApp(): Promise<NestFastifyApplication> {
   const moduleRef = await Test.createTestingModule({
@@ -26,7 +27,7 @@ export async function createTestApp(): Promise<NestFastifyApplication> {
 
   // Ensure defaults the same as in main.ts
   const basePath = (process.env.BASE_PATH ?? '').replace(/^\/+|\/+$/g, '');
-  const globalPrefix = basePath ? `${basePath}/api/v1` : 'api/v1';
+  const globalPrefix = buildApiPrefix(basePath);
   app.setGlobalPrefix(globalPrefix);
 
   const configService = app.get(ConfigService);
@@ -49,6 +50,7 @@ export async function createTestApp(): Promise<NestFastifyApplication> {
         basicUser,
         basicPass,
         bearerTokens,
+        publicPaths: ['/api/v1/health'],
       }),
     );
 

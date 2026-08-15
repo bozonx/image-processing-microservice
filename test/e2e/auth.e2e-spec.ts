@@ -65,13 +65,13 @@ describe('Auth (e2e)', () => {
       app = await createTestApp();
     });
 
-    it('rejects API without authorization', async () => {
+    it('keeps health public without authorization', async () => {
       const response = await app.inject({
         method: 'GET',
         url: '/api/v1/health',
       });
 
-      expect(response.statusCode).toBe(401);
+      expect(response.statusCode).toBe(200);
     });
 
     it('allows API with correct basic authorization', async () => {
@@ -120,13 +120,13 @@ describe('Auth (e2e)', () => {
       app = await createTestApp();
     });
 
-    it('rejects API without authorization', async () => {
+    it('keeps health public without authorization', async () => {
       const response = await app.inject({
         method: 'GET',
         url: '/api/v1/health',
       });
 
-      expect(response.statusCode).toBe(401);
+      expect(response.statusCode).toBe(200);
     });
 
     it('allows API with correct bearer token', async () => {
