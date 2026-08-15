@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Split CI validation from tag-only multi-architecture image releases and aligned the fleet-wide
+  Renovate policy.
 - Standardized fleet wiring: scripts, single `.env`, service identity, draining health checks,
   non-root multi-stage image, Compose resource limits, and Renovate configuration.
 - Added `POST /api/v1/process/raw` endpoint that accepts raw image stream in request body and processing params in `x-img-params` header. Watermark is not supported for this endpoint.

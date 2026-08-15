@@ -19,11 +19,13 @@
   },
   "packageRules": [
     {
+      "description": "Automerge non-major development updates after CI",
       "matchDepTypes": ["devDependencies"],
       "matchUpdateTypes": ["patch", "minor"],
       "automerge": true
     },
     {
+      "description": "Majors always require manual review",
       "matchUpdateTypes": ["major"],
       "automerge": false,
       "labels": ["dependencies", "major"]
@@ -37,16 +39,36 @@
       "matchPackageNames": ["fastify", "@fastify/**"]
     },
     {
+      "groupName": "hono",
+      "matchPackageNames": ["hono", "@hono/**"]
+    },
+    {
       "groupName": "eslint",
-      "matchPackageNames": ["eslint", "@eslint/**", "@typescript-eslint/**", "eslint-**", "typescript-eslint"]
+      "matchPackageNames": [
+        "eslint",
+        "@eslint/**",
+        "@typescript-eslint/**",
+        "eslint-**",
+        "typescript-eslint"
+      ]
     },
     {
       "groupName": "jest",
       "matchPackageNames": ["jest", "@jest/**", "ts-jest", "@types/jest"]
     },
     {
+      "groupName": "vitest",
+      "matchPackageNames": ["vitest", "@vitest/**"]
+    },
+    {
       "groupName": "types",
-      "matchPackageNames": ["@types/**"]
+      "matchPackageNames": ["@types/**", "@cloudflare/workers-types"]
+    },
+    {
+      "description": "Keep the fleet package manager current",
+      "groupName": "pnpm",
+      "matchManagers": ["npm"],
+      "matchDepTypes": ["packageManager"]
     }
   ]
 }
