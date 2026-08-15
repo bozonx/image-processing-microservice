@@ -6,6 +6,7 @@
 # Manifests
 !package.json
 !pnpm-lock.yaml
+!pnpm-workspace.yaml
 
 # Build configuration
 !tsconfig.json

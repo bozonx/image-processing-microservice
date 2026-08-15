@@ -1,7 +1,7 @@
 import type { ConfigService } from '@nestjs/config';
 import type { Params } from 'nestjs-pino';
 import type { AppConfig } from '../../config/app.config.js';
-import pkg from '../../../package.json' with { type: 'json' };
+import { SERVICE_NAME } from '../../config/service-info.js';
 
 export const getLoggerConfig = (configService: ConfigService): Params => {
   const appConfig = configService.get<AppConfig>('app');
@@ -15,7 +15,7 @@ export const getLoggerConfig = (configService: ConfigService): Params => {
       level: appConfig.logLevel,
       timestamp: () => `,"@timestamp":"${new Date().toISOString()}"`,
       base: {
-        service: pkg.name || 'app',
+        service: SERVICE_NAME,
         environment: appConfig.nodeEnv,
       },
       transport: isDev

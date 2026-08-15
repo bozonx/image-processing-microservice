@@ -79,6 +79,8 @@ export function createAuthHook(options: AuthHookOptions) {
 
   const anyAuthEnabled = basicEnabled || bearerEnabled;
 
+  // Fastify treats a two-argument hook as promise-based; it must return a promise.
+  // eslint-disable-next-line @typescript-eslint/require-await
   return async function authHook(req: FastifyRequest, res: FastifyReply) {
     if (!anyAuthEnabled) return;
 

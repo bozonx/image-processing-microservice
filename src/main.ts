@@ -1,4 +1,5 @@
 import 'reflect-metadata';
+import { setTimeout as sleep } from 'node:timers/promises';
 import { NestFactory } from '@nestjs/core';
 import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fastify';
 import { ValidationPipe } from '@nestjs/common';
@@ -11,6 +12,9 @@ import { AppModule } from './app.module.js';
 import type { AppConfig } from './config/app.config.js';
 import type { AuthConfig } from './config/auth.config.js';
 import { createAuthHook } from './common/auth/auth.hook.js';
+import { buildApiPrefix } from './common/http/api-prefix.js';
+import { SERVICE_NAME, SERVICE_VERSION } from './config/service-info.js';
+import { HealthService } from './modules/health/health.service.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = join(__filename, '..');
@@ -43,7 +47,7 @@ async function bootstrap() {
       logger: false,
       bodyLimit: bodyLimitBytes,
       forceCloseConnections: true,
-      closeTimeout: appConfig.shutdownTimeout,
+      closeTimeout: Math.max(appConfig.shutdownDrainSeconds * 1000, 1000),
     } as any),
     {
       bufferLogs: true,
@@ -60,7 +64,7 @@ async function bootstrap() {
   );
 
   // Configure global API prefix from configuration
-  const globalPrefix = appConfig.basePath ? `${appConfig.basePath}/api/v1` : 'api/v1';
+  const globalPrefix = buildApiPrefix(appConfig.basePath);
   app.setGlobalPrefix(globalPrefix);
 
   const basicUser = authConfig?.basicUser;
@@ -116,13 +120,12 @@ async function bootstrap() {
     logger.log(`📁 Serving static files from: ${publicPath}`, 'Bootstrap');
   }
 
-  // Enable graceful shutdown
-  app.enableShutdownHooks();
+  registerShutdown(app, appConfig.shutdownDrainSeconds, logger);
 
   await app.listen(appConfig.port, appConfig.host);
 
   logger.log(
-    `🚀 NestJS service is running on: http://${appConfig.host}:${appConfig.port}/${globalPrefix}`,
+    `${SERVICE_NAME} ${SERVICE_VERSION} listening on http://${appConfig.host}:${appConfig.port}/${globalPrefix}`,
     'Bootstrap',
   );
   if (appConfig.enableUi) {
@@ -134,8 +137,23 @@ async function bootstrap() {
   logger.log(`📊 Environment: ${appConfig.nodeEnv}`, 'Bootstrap');
   logger.log(`📝 Log level: ${appConfig.logLevel}`, 'Bootstrap');
   logger.log(`📦 Body limit: ${Math.round(bodyLimitBytes / 1024 / 1024)}MB`, 'Bootstrap');
+}
 
-  // Rely on enableShutdownHooks for graceful shutdown
+function registerShutdown(app: NestFastifyApplication, drainSeconds: number, logger: Logger): void {
+  let shuttingDown = false;
+  const shutdown = async (signal: string): Promise<void> => {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    logger.log(`${signal} received, draining for ${drainSeconds}s`, 'Shutdown');
+    app.get(HealthService).startDraining();
+    if (drainSeconds > 0) await sleep(drainSeconds * 1000);
+    await app.close();
+    logger.log('Shutdown complete', 'Shutdown');
+    process.exit(0);
+  };
+  for (const signal of ['SIGTERM', 'SIGINT'] as const) {
+    process.on(signal, () => void shutdown(signal));
+  }
 }
 
 void bootstrap();

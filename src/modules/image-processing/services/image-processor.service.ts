@@ -177,7 +177,7 @@ export class ImageProcessorService {
         pipeline = pipeline.resize(resize.width, resize.height, {
           fit: resize.fit ?? 'cover',
           withoutEnlargement: resize.withoutEnlargement ?? true,
-          position: resize.position as any,
+          position: resize.position,
         });
       }
     }
@@ -337,7 +337,7 @@ export class ImageProcessorService {
 
     return {
       input: scaledWatermark,
-      gravity: (config.position ?? 'southeast') as any,
+      gravity: config.position ?? 'southeast',
     };
   }
 

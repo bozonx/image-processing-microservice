@@ -1,0 +1,52 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended"],
+  "timezone": "UTC",
+  "schedule": ["before 6am on monday"],
+  "labels": ["dependencies"],
+  "rangeStrategy": "bump",
+  "postUpdateOptions": ["pnpmDedupe"],
+  "lockFileMaintenance": {
+    "enabled": true,
+    "schedule": ["before 6am on the first day of the month"]
+  },
+  "vulnerabilityAlerts": {
+    "enabled": true,
+    "labels": ["security"],
+    "schedule": ["at any time"],
+    "groupName": null,
+    "automerge": false
+  },
+  "packageRules": [
+    {
+      "matchDepTypes": ["devDependencies"],
+      "matchUpdateTypes": ["patch", "minor"],
+      "automerge": true
+    },
+    {
+      "matchUpdateTypes": ["major"],
+      "automerge": false,
+      "labels": ["dependencies", "major"]
+    },
+    {
+      "groupName": "nestjs",
+      "matchPackageNames": ["@nestjs/**"]
+    },
+    {
+      "groupName": "fastify",
+      "matchPackageNames": ["fastify", "@fastify/**"]
+    },
+    {
+      "groupName": "eslint",
+      "matchPackageNames": ["eslint", "@eslint/**", "@typescript-eslint/**", "eslint-**", "typescript-eslint"]
+    },
+    {
+      "groupName": "jest",
+      "matchPackageNames": ["jest", "@jest/**", "ts-jest", "@types/jest"]
+    },
+    {
+      "groupName": "types",
+      "matchPackageNames": ["@types/**"]
+    }
+  ]
+}

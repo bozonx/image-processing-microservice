@@ -85,7 +85,7 @@ export class ExifService {
       });
 
       return {
-        ...(exifData || {}),
+        ...(exifData ?? {}),
         width: metadata.width,
         height: metadata.height,
       };

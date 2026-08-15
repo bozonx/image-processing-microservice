@@ -50,7 +50,11 @@ export class QueueService implements OnModuleDestroy {
    * @throws ServiceUnavailableException if the service is shutting down.
    * @throws RequestTimeoutException if the task (including wait time) exceeds requestTimeout.
    */
-  public async add<T>(task: () => Promise<T>, priority: number = 2, signal?: AbortSignal): Promise<T> {
+  public async add<T>(
+    task: () => Promise<T>,
+    priority: number = 2,
+    signal?: AbortSignal,
+  ): Promise<T> {
     if (this.isShuttingDown) {
       throw new ServiceUnavailableException('Service is shutting down, rejecting new tasks');
     }
@@ -94,7 +98,7 @@ export class QueueService implements OnModuleDestroy {
         pending: this.queue.pending,
       });
 
-      return result as T;
+      return result;
     } catch (error) {
       const duration = Date.now() - startTime;
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';

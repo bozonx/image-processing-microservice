@@ -15,7 +15,7 @@ import { getLoggerConfig } from './common/logger/logger.factory.js';
     ConfigModule.forRoot({
       isGlobal: true,
       load: [appConfig, authConfig, imageConfig],
-      envFilePath: [`.env.${process.env.NODE_ENV ?? 'development'}`, '.env'],
+      envFilePath: ['.env'],
       cache: true,
     }),
     LoggerModule.forRootAsync({

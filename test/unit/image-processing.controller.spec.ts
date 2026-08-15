@@ -123,7 +123,7 @@ describe('ImageProcessingController', () => {
         size: buffer.length,
       };
 
-      jest.spyOn(imageProcessor, 'processStream').mockResolvedValue(processedResult as any);
+      jest.spyOn(imageProcessor, 'processStream').mockResolvedValue(processedResult);
 
       await controller.processRaw(req as any, res as any);
 
@@ -173,34 +173,44 @@ describe('ImageProcessingController', () => {
       const res = mockRes();
 
       // Simulate p-queue behavior: reject with abort error when signal aborts
-      jest.spyOn(queueService, 'add').mockImplementation(async (task: () => Promise<any>, _priority?: number, signal?: AbortSignal) => {
-        if (signal?.aborted) {
-          throw new Error('The operation was aborted');
-        }
-        return new Promise((resolve, reject) => {
-          signal?.addEventListener('abort', () => {
-            reject(new Error('The operation was aborted'));
-          }, { once: true });
-          task().then(resolve, reject);
-        });
-      });
+      jest
+        .spyOn(queueService, 'add')
+        .mockImplementation(
+          async (task: () => Promise<any>, _priority?: number, signal?: AbortSignal) => {
+            if (signal?.aborted) {
+              throw new Error('The operation was aborted');
+            }
+            return new Promise((resolve, reject) => {
+              signal?.addEventListener(
+                'abort',
+                () => {
+                  reject(new Error('The operation was aborted'));
+                },
+                { once: true },
+              );
+              task().then(resolve, reject);
+            });
+          },
+        );
 
       // Simulate client disconnect by aborting after a tick
-      jest.spyOn(imageProcessor, 'processStream').mockImplementation(async (_input, _mime, _t, _o, _w, signal) => {
-        // Wait a tick so the abort can fire
-        await new Promise(r => setTimeout(r, 10));
-        if (signal?.aborted) {
-          throw new Error('Request aborted');
-        }
-        return {
-          buffer: Buffer.from('processed'),
-          mimeType: 'image/webp',
-          extension: 'webp',
-          width: 100,
-          height: 100,
-          size: 9,
-        } as any;
-      });
+      jest
+        .spyOn(imageProcessor, 'processStream')
+        .mockImplementation(async (_input, _mime, _t, _o, _w, signal) => {
+          // Wait a tick so the abort can fire
+          await new Promise(r => setTimeout(r, 10));
+          if (signal?.aborted) {
+            throw new Error('Request aborted');
+          }
+          return {
+            buffer: Buffer.from('processed'),
+            mimeType: 'image/webp',
+            extension: 'webp',
+            width: 100,
+            height: 100,
+            size: 9,
+          };
+        });
 
       // Trigger abort by emitting 'close' on res.raw before processing completes
       setTimeout(() => {
@@ -229,7 +239,7 @@ describe('ImageProcessingController', () => {
           width: 100,
           height: 100,
           size: buffer.length,
-        } as any;
+        };
       });
 
       await expect(controller.processRaw(req as any, res as any)).rejects.toThrow(
@@ -263,7 +273,7 @@ describe('ImageProcessingController', () => {
         size: buffer.length,
       };
 
-      jest.spyOn(imageProcessor, 'processStream').mockResolvedValue(processedResult as any);
+      jest.spyOn(imageProcessor, 'processStream').mockResolvedValue(processedResult);
 
       await controller.process(req as any, res as any);
 
@@ -315,7 +325,7 @@ describe('ImageProcessingController', () => {
         size: buffer.length,
       };
 
-      jest.spyOn(imageProcessor, 'processStream').mockResolvedValue(processedResult as any);
+      jest.spyOn(imageProcessor, 'processStream').mockResolvedValue(processedResult);
 
       await controller.process(req as any, res as any);
 
@@ -390,7 +400,7 @@ describe('ImageProcessingController', () => {
       const exifData = { Make: 'Canon' };
 
       jest.spyOn(exifService, 'extract').mockResolvedValue(exifData);
-      
+
       const res = mockRes();
       const result = await controller.extractExif(req as any, res as any);
 

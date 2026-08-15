@@ -25,8 +25,8 @@ export class AppConfig {
   public logLevel!: string;
 
   @IsInt()
-  @Min(1)
-  public shutdownTimeout!: number;
+  @Min(0)
+  public shutdownDrainSeconds!: number;
 }
 
 export default registerAs('app', (): AppConfig => {
@@ -37,7 +37,7 @@ export default registerAs('app', (): AppConfig => {
     basePath: (process.env.BASE_PATH ?? '').replace(/^\/+|\/+$/g, ''),
     nodeEnv: process.env.NODE_ENV ?? 'production',
     logLevel: process.env.LOG_LEVEL ?? 'warn',
-    shutdownTimeout: parseInt(process.env.SHUTDOWN_TIMEOUT_SECONDS ?? '30', 10) * 1000,
+    shutdownDrainSeconds: parseInt(process.env.SHUTDOWN_DRAIN_SECONDS ?? '5', 10),
   });
 
   const errors = validateSync(config, {

@@ -273,17 +273,7 @@ export class ImageProcessingController {
           const limiter = this.createMaxBytesTransform(this.getMaxBytes());
           const inputStream = (req.raw as unknown as Readable).pipe(limiter);
 
-          let resultStream: Readable | undefined;
-
           const cleanup = (error?: Error) => {
-            try {
-              if (resultStream && !resultStream.destroyed) {
-                resultStream.destroy(error);
-              }
-            } catch {
-              // ignore
-            }
-
             try {
               if (!inputStream.destroyed) {
                 inputStream.destroy(error);
@@ -414,9 +404,12 @@ export class ImageProcessingController {
             throw new Error('Request aborted');
           }
 
-          const rawExif = (await this.exifService.extract(fileData!.buffer, fileData!.mimetype)) as any;
+          const rawExif = (await this.exifService.extract(
+            fileData.buffer,
+            fileData.mimetype,
+          )) as any;
 
-          const { width, height, ...exif } = rawExif || {};
+          const { width, height, ...exif } = rawExif ?? {};
           const responseBody = {
             exif: Object.keys(exif).length > 0 ? exif : null,
             width,

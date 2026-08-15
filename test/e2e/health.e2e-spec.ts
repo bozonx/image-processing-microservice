@@ -27,7 +27,9 @@ describe('Health (e2e)', () => {
       const body = JSON.parse(response.body);
       expect(body).toEqual({
         status: 'ok',
-        timestamp: expect.any(String),
+        service: 'image-processing-microservice',
+        version: 'dev',
+        uptimeSec: expect.any(Number),
         queue: {
           pending: expect.any(Number),
           size: expect.any(Number),

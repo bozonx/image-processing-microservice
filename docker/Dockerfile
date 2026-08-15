@@ -1,64 +1,37 @@
+# syntax=docker/dockerfile:1
 ARG NODE_MAJOR=24
 
-# --- Build Stage ---
-FROM node:${NODE_MAJOR}-bookworm-slim AS builder
-
-# Install build dependencies
-RUN apt-get update && apt-get install -y --no-install-recommends \
-  python3 \
-  build-essential \
-  && rm -rf /var/lib/apt/lists/*
-
+FROM node:${NODE_MAJOR}-bookworm-slim AS deps
 WORKDIR /app
-
+RUN apt-get update && apt-get install -y --no-install-recommends python3 build-essential \
+  && rm -rf /var/lib/apt/lists/*
 RUN corepack enable
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+RUN --mount=type=cache,id=pnpm-store,target=/root/.local/share/pnpm/store \
+  pnpm install --frozen-lockfile
 
-COPY package.json pnpm-lock.yaml ./
-
-# Install dependencies (including devDependencies)
-RUN pnpm install --frozen-lockfile
-
-# Copy only what the build needs (never COPY . . — it drags secrets into this layer)
+FROM deps AS build
 COPY tsconfig.json tsconfig.build.json nest-cli.json ./
 COPY src ./src
 COPY public ./public
+RUN pnpm build && pnpm prune --prod
 
-# Build the application
-RUN pnpm run build
-
-
-# --- Production Stage ---
-FROM node:${NODE_MAJOR}-bookworm-slim AS runner
-
+FROM node:${NODE_MAJOR}-bookworm-slim AS runtime
 WORKDIR /app
-
-ENV NODE_ENV=production
-ENV LISTEN_HOST=0.0.0.0
-ENV LISTEN_PORT=8080
-ENV TZ=UTC
-ENV LOG_LEVEL=info
-
-RUN corepack enable
-
-COPY package.json pnpm-lock.yaml ./
-
-# Install only production dependencies
-RUN pnpm install --prod --frozen-lockfile
-
-# Copy built application from builder stage
-COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/public ./public
-
-# Create non-root user
-RUN groupadd -g 1001 nodejs && \
-  useradd -u 1001 -g 1001 -m -s /usr/sbin/nologin nodejs
-
-USER nodejs
-
+ARG APP_VERSION=dev
+ENV NODE_ENV=production \
+  LISTEN_HOST=0.0.0.0 \
+  LISTEN_PORT=8080 \
+  LOG_LEVEL=warn \
+  TZ=UTC \
+  SERVICE_VERSION=${APP_VERSION}
+COPY --from=build --chown=node:node /app/node_modules ./node_modules
+COPY --from=build --chown=node:node /app/dist ./dist
+COPY --from=build --chown=node:node /app/public ./public
+COPY --chown=node:node package.json ./
+USER node
 EXPOSE 8080
-
-# Health check
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-  CMD node -e "const bp = process.env.BASE_PATH ? '/' + process.env.BASE_PATH.replace(/^\/+|\/+$/g, '') : ''; require('http').get('http://localhost:' + (process.env.LISTEN_PORT || 8080) + bp + '/api/v1/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"
-
-CMD ["node", "dist/src/main.js"]
+  CMD node -e "const b=(process.env.BASE_PATH||'').replace(/^\/+|\/+$/g,''); const p='/'+(b?b+'/':'')+'api/v1/health'; require('http').get('http://127.0.0.1:'+(process.env.LISTEN_PORT||8080)+p,r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"
+ENTRYPOINT ["node", "--enable-source-maps"]
+CMD ["dist/src/main.js"]
