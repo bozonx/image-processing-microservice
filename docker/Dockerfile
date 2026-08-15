@@ -18,7 +18,10 @@ COPY package.json pnpm-lock.yaml ./
 # Install dependencies (including devDependencies)
 RUN pnpm install --frozen-lockfile
 
-COPY . .
+# Copy only what the build needs (never COPY . . — it drags secrets into this layer)
+COPY tsconfig.json tsconfig.build.json nest-cli.json ./
+COPY src ./src
+COPY public ./public
 
 # Build the application
 RUN pnpm run build

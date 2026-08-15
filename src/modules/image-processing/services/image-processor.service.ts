@@ -1,6 +1,7 @@
 import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import sharp from 'sharp';
+import type { Metadata, OverlayOptions, Sharp, SharpOptions } from 'sharp';
 import { Readable } from 'node:stream';
 import { TransformDto, OutputDto, WatermarkDto } from '../dto/process-image.dto.js';
 import type { ImageDefaults, ImageConfig } from '../../../config/image.config.js';
@@ -54,13 +55,13 @@ export class ImageProcessorService {
     }
 
     const options = this.getSharpOptions(mimeType);
-    let pipeline = sharp({ ...options, failOnError: false });
+    let pipeline = sharp({ ...options, failOn: 'none' });
 
     pipeline = this.applyTransformations(pipeline, transform);
 
     if (watermark && transform?.watermark) {
       const inputBuffer = await this.streamToBuffer(inputStream);
-      pipeline = sharp(inputBuffer, { ...options, failOnError: false });
+      pipeline = sharp(inputBuffer, { ...options, failOn: 'none' });
       pipeline = this.applyTransformations(pipeline, transform);
 
       const metadata = await pipeline.metadata();
@@ -125,8 +126,8 @@ export class ImageProcessorService {
   /**
    * Returns specific sharp options based on MIME type (e.g., enabling animation for GIFs).
    */
-  private getSharpOptions(mimeType: string): sharp.SharpOptions {
-    const options: sharp.SharpOptions = {};
+  private getSharpOptions(mimeType: string): SharpOptions {
+    const options: SharpOptions = {};
     if (mimeType === 'image/gif') {
       options.animated = true;
     }
@@ -139,7 +140,7 @@ export class ImageProcessorService {
    * @param pipeline - The current sharp instance.
    * @param transform - The transformation parameters.
    */
-  private applyTransformations(pipeline: sharp.Sharp, transform?: TransformDto): sharp.Sharp {
+  private applyTransformations(pipeline: Sharp, transform?: TransformDto): Sharp {
     if (!transform) {
       // Apply default auto-orient if no transform provided
       if (this.defaults.autoOrient) {
@@ -204,7 +205,7 @@ export class ImageProcessorService {
    * @param pipeline - The current sharp instance.
    * @param output - Output format and optimization parameters.
    */
-  private applyOutputFormat(pipeline: sharp.Sharp, output?: OutputDto): sharp.Sharp {
+  private applyOutputFormat(pipeline: Sharp, output?: OutputDto): Sharp {
     const format = output?.format ?? this.defaults.format;
     const quality = output?.quality ?? this.defaults.quality;
     const stripMetadata = output?.stripMetadata ?? this.defaults.stripMetadata;
@@ -282,10 +283,10 @@ export class ImageProcessorService {
    * @param metadata - Metadata of the main image.
    */
   private async applyWatermark(
-    pipeline: sharp.Sharp,
+    pipeline: Sharp,
     watermarkBuffer: Buffer,
     watermarkConfig: WatermarkDto,
-    metadata: sharp.Metadata,
+    metadata: Metadata,
   ): Promise<void> {
     const { width = 0, height = 0 } = metadata;
 
@@ -324,7 +325,7 @@ export class ImageProcessorService {
     config: WatermarkDto,
     imageWidth: number,
     imageHeight: number,
-  ): Promise<sharp.OverlayOptions> {
+  ): Promise<OverlayOptions> {
     // Watermark scaling
     const scaledWatermark = await this.scaleWatermark(
       watermarkBuffer,
@@ -354,7 +355,7 @@ export class ImageProcessorService {
     config: WatermarkDto,
     imageWidth: number,
     imageHeight: number,
-  ): Promise<sharp.OverlayOptions[]> {
+  ): Promise<OverlayOptions[]> {
     // Watermark scaling
     const scaledWatermark = await this.scaleWatermark(
       watermarkBuffer,
@@ -375,7 +376,7 @@ export class ImageProcessorService {
     const rows = Math.ceil(imageHeight / (wmHeight + spacing));
 
     // Create composites array
-    const composites: sharp.OverlayOptions[] = [];
+    const composites: OverlayOptions[] = [];
     for (let row = 0; row < rows; row++) {
       for (let col = 0; col < cols; col++) {
         composites.push({

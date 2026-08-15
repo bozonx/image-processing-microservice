@@ -1,67 +1,17 @@
-# Dependencies
-node_modules/
+# Whitelist: deny everything, then allow only what the image build needs.
+# A blacklist eventually misses a new secret file — that is how .env.production and
+# service-account keys reached the builder layer. Do not convert this back to a blacklist.
+*
 
-# Build artifacts
-# Build artifacts
-dist/
-*.tsbuildinfo
-coverage/
+# Manifests
+!package.json
+!pnpm-lock.yaml
 
-# Tests
-test/
-*.spec.ts
-*.test.ts
-jest.config.ts
-jest.d.ts
-tsconfig.spec.json
+# Build configuration
+!tsconfig.json
+!tsconfig.build.json
+!nest-cli.json
 
-# Development files
-.env
-.env.local
-.env.development
-.env.*.local
-.env.development.example
-.env.production.example
-*.log
-npm-debug.log*
-pnpm-debug.log*
-
-# IDE and editor files
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-.DS_Store
-
-# Documentation
-docs/
-dev_docs/
-README.md
-CHANGELOG.md
-*.md
-
-# Git
-.git/
-.gitignore
-.gitattributes
-
-# Docker
-docker/
-Dockerfile*
-docker-compose*.yml
-.dockerignore
-
-# CI/CD
-.github/
-.gitlab-ci.yml
-
-# TypeScript configs
-tsconfig.eslint.json
-
-# Misc
-tmp/
-temp/
-*.tmp
-LICENSE
-
+# Sources and static assets
+!src
+!public
