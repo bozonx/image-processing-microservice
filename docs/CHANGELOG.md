@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Fixed the Docker runtime entry point to launch the Nest build output at `dist/main.js`.
 - Upgraded `class-validator` to 0.15.1 after validating request DTOs with unit and e2e tests.
 - Split CI validation from tag-only multi-architecture image releases and aligned the fleet-wide
   Renovate policy.
