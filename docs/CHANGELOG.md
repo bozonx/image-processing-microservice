@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Upgraded `class-validator` to 0.15.1 after validating request DTOs with unit and e2e tests.
 - Split CI validation from tag-only multi-architecture image releases and aligned the fleet-wide
   Renovate policy.
 - Standardized fleet wiring: scripts, single `.env`, service identity, draining health checks,
