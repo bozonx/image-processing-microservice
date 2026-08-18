@@ -51,13 +51,19 @@ describe('ImageProcessorService', () => {
     );
 
     const resultBuffer = result.buffer;
-    const metadata = await sharp(resultBuffer).metadata();
+    let width = result.width;
+    let height = result.height;
+    if (dto.output?.format !== 'raw') {
+      const metadata = await sharp(resultBuffer).metadata();
+      width = metadata.width ?? result.width;
+      height = metadata.height ?? result.height;
+    }
 
     return {
       buffer: resultBuffer,
       size: resultBuffer.length,
       mimeType: result.mimeType,
-      dimensions: { width: metadata.width, height: metadata.height },
+      dimensions: { width, height },
     };
   };
 
@@ -1136,6 +1142,156 @@ describe('ImageProcessorService', () => {
 
       expect(result.dimensions.width).toBe(50);
       expect(result.dimensions.height).toBe(100);
+    });
+
+    it('should handle watermark with complex transform (rotate 90, crop, resize inside/outside/single dimension)', async () => {
+      const inputBuffer = await sharp({
+        create: {
+          width: 400,
+          height: 200,
+          channels: 3,
+          background: { r: 0, g: 255, b: 0 },
+        },
+      })
+        .jpeg()
+        .toBuffer();
+
+      const watermarkBuffer = await createWatermarkBuffer(20, 20);
+
+      // Test fit: inside
+      const resInside = await processWrapper({
+        image: inputBuffer.toString('base64'),
+        mimeType: 'image/jpeg',
+        watermark: { image: watermarkBuffer.toString('base64') },
+        transform: {
+          watermark: { mode: 'single', scale: 10 },
+          resize: { width: 100, height: 100, fit: 'inside' },
+        },
+      });
+      expect(resInside.dimensions.width).toBe(100);
+      expect(resInside.dimensions.height).toBe(50);
+
+      // Test fit: outside
+      const resOutside = await processWrapper({
+        image: inputBuffer.toString('base64'),
+        mimeType: 'image/jpeg',
+        watermark: { image: watermarkBuffer.toString('base64') },
+        transform: {
+          watermark: { mode: 'single', scale: 10 },
+          resize: { width: 100, height: 100, fit: 'outside' },
+        },
+      });
+      expect(resOutside.dimensions.width).toBe(200);
+      expect(resOutside.dimensions.height).toBe(100);
+
+      // Test resize width only
+      const resWidthOnly = await processWrapper({
+        image: inputBuffer.toString('base64'),
+        mimeType: 'image/jpeg',
+        watermark: { image: watermarkBuffer.toString('base64') },
+        transform: {
+          watermark: { mode: 'single', scale: 10 },
+          resize: { width: 100 },
+        },
+      });
+      expect(resWidthOnly.dimensions.width).toBe(100);
+      expect(resWidthOnly.dimensions.height).toBe(50);
+
+      // Test resize height only
+      const resHeightOnly = await processWrapper({
+        image: inputBuffer.toString('base64'),
+        mimeType: 'image/jpeg',
+        watermark: { image: watermarkBuffer.toString('base64') },
+        transform: {
+          watermark: { mode: 'single', scale: 10 },
+          resize: { height: 100 },
+        },
+      });
+      expect(resHeightOnly.dimensions.width).toBe(200);
+      expect(resHeightOnly.dimensions.height).toBe(100);
+
+      // Test rotate + crop + watermark
+      const resRotateCrop = await processWrapper({
+        image: inputBuffer.toString('base64'),
+        mimeType: 'image/jpeg',
+        watermark: { image: watermarkBuffer.toString('base64') },
+        transform: {
+          watermark: { mode: 'single', scale: 10 },
+          rotate: 90,
+          crop: { left: 0, top: 0, width: 150, height: 150 },
+        },
+      });
+      expect(resRotateCrop.dimensions.width).toBe(150);
+      expect(resRotateCrop.dimensions.height).toBe(150);
+    });
+
+    it('should handle GIF, AVIF, TIFF and RAW output formats', async () => {
+      const inputBuffer = await sharp({
+        create: {
+          width: 50,
+          height: 50,
+          channels: 3,
+          background: { r: 128, g: 128, b: 128 },
+        },
+      })
+        .png()
+        .toBuffer();
+
+      const resGif = await processWrapper({
+        image: inputBuffer.toString('base64'),
+        mimeType: 'image/png',
+        output: { format: 'gif', effort: 5, progressive: true },
+      });
+      expect(resGif.mimeType).toBe('image/gif');
+
+      const resAvif = await processWrapper({
+        image: inputBuffer.toString('base64'),
+        mimeType: 'image/png',
+        output: { format: 'avif', quality: 75, effort: 4 },
+      });
+      expect(resAvif.mimeType).toBe('image/avif');
+
+      const resTiff = await processWrapper({
+        image: inputBuffer.toString('base64'),
+        mimeType: 'image/png',
+        output: { format: 'tiff', quality: 80 },
+      });
+      expect(resTiff.mimeType).toBe('image/tiff');
+
+      const resRaw = await processWrapper({
+        image: inputBuffer.toString('base64'),
+        mimeType: 'image/png',
+        output: { format: 'raw' },
+      });
+      expect(resRaw.mimeType).toBe('application/octet-stream');
+    });
+
+    it('should throw BadRequestException for invalid format or invalid MIME type', async () => {
+      const inputBuffer = await sharp({
+        create: {
+          width: 10,
+          height: 10,
+          channels: 3,
+          background: { r: 0, g: 0, b: 0 },
+        },
+      })
+        .png()
+        .toBuffer();
+
+      await expect(
+        processWrapper({
+          image: inputBuffer.toString('base64'),
+          mimeType: 'text/plain',
+        }),
+      ).rejects.toThrow(BadRequestException);
+
+      await expect(
+        processWrapper({
+          image: inputBuffer.toString('base64'),
+          mimeType: 'image/png',
+          output: { format: 'unsupported' },
+        }),
+      ).rejects.toThrow(BadRequestException);
     });
   });
 });

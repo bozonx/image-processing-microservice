@@ -6,12 +6,6 @@ allowBuilds:
   sharp: true
   unrs-resolver: true
 
-# Note: a tree-wide `fastify: 5.7.1` override used to live in package.json#pnpm.overrides.
-# It was removed on purpose — it pinned every copy of Fastify, including the one inside
-# @nestjs/platform-fastify, to a version with a body-validation bypass.
-minimumReleaseAgeExclude:
-  - '@fastify/multipart@10.1.1'
-
 # Transitive vulnerabilities that no direct-dependency upgrade fixes.
 # Each entry names the advisory it closes; drop an entry once the parent ships a fixed range.
 overrides:

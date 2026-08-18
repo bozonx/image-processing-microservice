@@ -41,28 +41,43 @@ export const getLoggerConfig = (configService: ConfigService): Params => {
           }
         : undefined,
       serializers: {
-        req: req => ({
-          id: req.id,
-          method: req.method,
-          url: req.url,
-          path: req.url?.split('?')[0],
-          remoteAddress: req.ip,
-          remotePort: req.socket?.remotePort,
-        }),
-        res: res => ({
-          statusCode: res.statusCode,
-        }),
-        err: err => ({
-          type: err.type,
-          message: err.message,
-          stack: err.stack,
-        }),
+        req: (req: unknown): Record<string, unknown> => {
+          const r = req as {
+            id?: string | number;
+            method?: string;
+            url?: string;
+            ip?: string;
+            socket?: { remotePort?: number };
+          };
+          return {
+            id: r.id,
+            method: r.method,
+            url: r.url,
+            path: r.url?.split('?')[0],
+            remoteAddress: r.ip,
+            remotePort: r.socket?.remotePort,
+          };
+        },
+        res: (res: unknown): Record<string, unknown> => {
+          const r = res as { statusCode?: number };
+          return {
+            statusCode: r.statusCode,
+          };
+        },
+        err: (err: unknown): Record<string, unknown> => {
+          const e = err as { type?: string; message?: string; stack?: string };
+          return {
+            type: e.type,
+            message: e.message,
+            stack: e.stack,
+          };
+        },
       },
       // Emitted through customProps rather than the `req` serializer: Pino serializes the
       // request bindings when the child logger is created, which is before the auth hook has
       // identified the caller. customProps runs when the line is written.
-      customProps: req => ({
-        client: (req as unknown as { authClient?: string }).authClient,
+      customProps: (req: unknown): Record<string, unknown> => ({
+        client: (req as { authClient?: string }).authClient,
       }),
       redact: {
         paths: ['req.headers.authorization', 'req.headers["x-api-key"]', 'req.headers.cookie'],

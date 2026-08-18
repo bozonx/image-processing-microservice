@@ -39,25 +39,26 @@ export class ExifService {
         });
 
       // parse() returns data or undefined if nothing found
-      const exifData = await exifr.parse(buffer, {
+      const parsed = (await exifr.parse(buffer, {
         translateKeys: true,
         translateValues: false,
         sanitize: true,
-      });
+      })) as Record<string, unknown> | undefined;
+      const exifData: Record<string, unknown> = parsed ?? {};
 
       const duration = Date.now() - startTime;
 
       this.logger.debug({
         msg: 'EXIF and metadata extracted',
         duration,
-        hasExif: !!exifData,
+        hasExif: parsed !== undefined,
         sizeBytes: buffer.length,
         width: metadata.width,
         height: metadata.height,
       });
 
       return {
-        ...(exifData ?? {}),
+        ...exifData,
         width: metadata.width,
         height: metadata.height,
       };

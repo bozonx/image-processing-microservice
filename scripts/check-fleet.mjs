@@ -23,6 +23,7 @@ const SHARED_FILES = [
   '.prettierrc.yml',
   '.prettierignore',
   'eslint.config.js',
+  'knip.json',
   'renovate.json',
   'scripts/check-fleet.mjs',
   'tsconfig.json',
