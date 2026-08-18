@@ -1,4 +1,5 @@
 import 'reflect-metadata';
+import './config/env.js';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { NestFactory } from '@nestjs/core';
 import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fastify';

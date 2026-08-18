@@ -639,6 +639,123 @@ describe('ImageProcessorService', () => {
       expect(result.dimensions.width).toBe(500);
       expect(result.dimensions.height).toBe(500);
     });
+
+    it('should scale watermark relative to transformed image dimensions rather than input dimensions', async () => {
+      const inputBuffer = await sharp({
+        create: {
+          width: 1000,
+          height: 1000,
+          channels: 3,
+          background: { r: 255, g: 255, b: 255 },
+        },
+      })
+        .png()
+        .toBuffer();
+
+      const watermarkBuffer = await createWatermarkBuffer(200, 200);
+
+      // Input 1000x1000 resized to 100x100.
+      // If scale was calculated against input (1000x1000), 50% = 500px, which exceeds the 100x100 resized image and crashes Sharp.
+      // With post-transform scaling, 50% of 100px = 50px watermark on 100x100 image.
+      const result = await processWrapper({
+        image: inputBuffer.toString('base64'),
+        mimeType: 'image/png',
+        watermark: {
+          image: watermarkBuffer.toString('base64'),
+        },
+        transform: {
+          resize: {
+            width: 100,
+            height: 100,
+          },
+          watermark: {
+            mode: 'single',
+            scale: 50,
+          },
+        },
+      });
+
+      expect(result.dimensions.width).toBe(100);
+      expect(result.dimensions.height).toBe(100);
+    });
+
+    it('should reject tiled watermark exceeding maximum tile limit (DoS protection)', async () => {
+      const inputBuffer = await sharp({
+        create: {
+          width: 8000,
+          height: 8000,
+          channels: 3,
+          background: { r: 255, g: 255, b: 255 },
+        },
+      })
+        .png()
+        .toBuffer();
+
+      // Thin watermark: 2000x10
+      const watermarkBuffer = await sharp({
+        create: {
+          width: 2000,
+          height: 10,
+          channels: 4,
+          background: { r: 0, g: 0, b: 255, alpha: 0.5 },
+        },
+      })
+        .png()
+        .toBuffer();
+
+      // For 8000x8000 image, scale 1% => targetSize 80px.
+      // Watermark 2000x10 fit: inside => 80x0.4 -> 80x1.
+      // Tiling 8000x8000 with 80x1 => cols: 100, rows: 8000 => 800,000 tiles.
+      await expect(
+        processWrapper({
+          image: inputBuffer.toString('base64'),
+          mimeType: 'image/png',
+          watermark: {
+            image: watermarkBuffer.toString('base64'),
+          },
+          transform: {
+            watermark: {
+              mode: 'tile',
+              scale: 1,
+            },
+          },
+        }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('should clamp scale to at least 1px on small images to prevent 0px dimension error', async () => {
+      const inputBuffer = await sharp({
+        create: {
+          width: 10,
+          height: 10,
+          channels: 3,
+          background: { r: 255, g: 255, b: 255 },
+        },
+      })
+        .png()
+        .toBuffer();
+
+      const watermarkBuffer = await createWatermarkBuffer(50, 50);
+
+      // 10x10 image with scale: 1 -> Math.min(10, 10) * 0.01 = 0.1 -> Math.round(0.1) was 0.
+      // Clamped to 1px -> should process successfully without throwing 500
+      const result = await processWrapper({
+        image: inputBuffer.toString('base64'),
+        mimeType: 'image/png',
+        watermark: {
+          image: watermarkBuffer.toString('base64'),
+        },
+        transform: {
+          watermark: {
+            mode: 'single',
+            scale: 1,
+          },
+        },
+      });
+
+      expect(result.dimensions.width).toBe(10);
+      expect(result.dimensions.height).toBe(10);
+    });
   });
 
   describe('Edge Cases - Invalid Input', () => {

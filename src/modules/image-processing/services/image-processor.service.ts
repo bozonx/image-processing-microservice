@@ -56,18 +56,24 @@ export class ImageProcessorService {
     }
 
     const options = this.getSharpOptions(mimeType);
-    let pipeline = sharp({ ...options, failOn: 'none' });
-
-    pipeline = this.applyTransformations(pipeline, transform);
+    let pipeline: Sharp;
 
     if (watermark && transform?.watermark) {
       const inputBuffer = await this.streamToBuffer(inputStream);
-      pipeline = sharp(inputBuffer, { ...options, failOn: 'none' });
-      pipeline = this.applyTransformations(pipeline, transform);
+      let prePipeline = sharp(inputBuffer, { ...options, failOn: 'none' });
+      prePipeline = this.applyTransformations(prePipeline, transform);
+      const { data: intermediateBuffer, info } = await prePipeline.toBuffer({
+        resolveWithObject: true,
+      });
 
-      const metadata = await pipeline.metadata();
-      await this.applyWatermark(pipeline, watermark.buffer, transform.watermark, metadata);
+      pipeline = sharp(intermediateBuffer, { failOn: 'none' });
+      await this.applyWatermark(pipeline, watermark.buffer, transform.watermark, {
+        width: info.width,
+        height: info.height,
+      });
     } else {
+      pipeline = sharp({ ...options, failOn: 'none' });
+      pipeline = this.applyTransformations(pipeline, transform);
       inputStream.pipe(pipeline);
     }
 
@@ -287,7 +293,7 @@ export class ImageProcessorService {
     pipeline: Sharp,
     watermarkBuffer: Buffer,
     watermarkConfig: WatermarkDto,
-    metadata: Metadata,
+    metadata: { width?: number; height?: number } | Metadata,
   ): Promise<void> {
     const { width = 0, height = 0 } = metadata;
 
@@ -372,9 +378,28 @@ export class ImageProcessorService {
     const wmHeight = wmMetadata.height ?? 0;
     const spacing = config.spacing ?? 0;
 
+    if (wmWidth <= 0 || wmHeight <= 0) {
+      throw new BadRequestException('Invalid watermark dimensions');
+    }
+
+    const stepX = wmWidth + spacing;
+    const stepY = wmHeight + spacing;
+
+    if (stepX <= 0 || stepY <= 0) {
+      throw new BadRequestException('Watermark dimensions with spacing must be positive');
+    }
+
     // Calculate the number of repetitions
-    const cols = Math.ceil(imageWidth / (wmWidth + spacing));
-    const rows = Math.ceil(imageHeight / (wmHeight + spacing));
+    const cols = Math.ceil(imageWidth / stepX);
+    const rows = Math.ceil(imageHeight / stepY);
+    const totalTiles = cols * rows;
+
+    const MAX_WATERMARK_TILES = 2000;
+    if (totalTiles > MAX_WATERMARK_TILES) {
+      throw new BadRequestException(
+        `Watermark tile count (${totalTiles}) exceeds limit of ${MAX_WATERMARK_TILES}`,
+      );
+    }
 
     // Create composites array
     const composites: OverlayOptions[] = [];
@@ -382,8 +407,8 @@ export class ImageProcessorService {
       for (let col = 0; col < cols; col++) {
         composites.push({
           input: scaledWatermark,
-          top: row * (wmHeight + spacing),
-          left: col * (wmWidth + spacing),
+          top: row * stepY,
+          left: col * stepX,
         });
       }
     }
@@ -408,11 +433,12 @@ export class ImageProcessorService {
     imageHeight: number,
     opacity?: number,
   ): Promise<Buffer> {
-    const targetSize = Math.min(imageWidth, imageHeight) * (scalePercent / 100);
+    const rawTargetSize = Math.min(imageWidth, imageHeight) * (scalePercent / 100);
+    const targetSize = Math.max(1, Math.round(rawTargetSize));
 
     let pipeline = sharp(watermarkBuffer).resize({
-      width: Math.round(targetSize),
-      height: Math.round(targetSize),
+      width: targetSize,
+      height: targetSize,
       fit: 'inside',
       withoutEnlargement: true,
     });

@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Fixed 6 critical functional bugs:
+  - Fixed watermark scaling to compute dimensions against post-transformation (resized/cropped/rotated) intermediate buffer rather than raw input dimensions, preventing overlay dimension mismatches and Sharp 500 errors.
+  - Mitigated DoS vulnerability in tiled watermark mode by validating step sizes and limiting maximum tile overlays to 2,000, returning HTTP 400 when exceeded.
+  - Clamped watermark scale dimensions to a minimum of 1px (`Math.max(1, ...)`) to prevent 0px dimension errors on small images.
+  - Preserved `HttpException` status codes (e.g. `PayloadTooLargeException` 413) across multipart stream upload endpoints instead of masking them as `BadRequestException` 400.
+  - Added native `.env` preloading in `src/config/env.ts` imported by `main.ts` and `service-info.ts` so `FILE_MAX_BYTES_MB`, `SERVICE_NAME`, and `SERVICE_VERSION` take effect properly before bootstrap.
 - Optimized dependencies and test configuration: converted Jest configuration to native ESM `jest.config.js`, removed redundant `ts-node` and `tsconfig-paths` devDependencies, updated `p-queue` and `@jest/globals` to latest minor releases, and cleaned up tsconfig configurations.
 - Updated `README.md` to fix heading hierarchy, add comprehensive API usage and parameter references, and remove trailing whitespace.
 - Relocated validation errors helper to `src/common/utils/validation-errors.ts` to adhere strictly to the `src/` layout convention (`common/`, `config/`, `modules/`).

@@ -386,6 +386,23 @@ describe('ImageProcessingController', () => {
       const req = mockReq([filePart, paramsPart]);
       await expect(controller.process(req as any, {} as any)).rejects.toThrow('Invalid params');
     });
+
+    it('should throw PayloadTooLargeException when multipart upload exceeds limit', async () => {
+      const filePart = {
+        type: 'file',
+        fieldname: 'file',
+        mimetype: 'image/jpeg',
+        // Exceeds 10MB limit configured in ConfigService mock
+        file: Readable.from([Buffer.alloc(11 * 1024 * 1024)]),
+      };
+
+      const req = mockReq([filePart]);
+      const res = mockRes();
+
+      await expect(controller.process(req as any, res as any)).rejects.toThrow(
+        PayloadTooLargeException,
+      );
+    });
   });
 
   describe('extractExif', () => {
@@ -407,6 +424,21 @@ describe('ImageProcessingController', () => {
       expect(queueService.add).toHaveBeenCalled();
       expect(exifService.extract).toHaveBeenCalledWith(Buffer.from('test-data'), filePart.mimetype);
       expect(result).toEqual({ exif: exifData, width: undefined, height: undefined });
+    });
+
+    it('should throw PayloadTooLargeException when exif multipart upload exceeds limit', async () => {
+      const filePart = {
+        type: 'file',
+        fieldname: 'file',
+        mimetype: 'image/jpeg',
+        file: Readable.from([Buffer.alloc(11 * 1024 * 1024)]),
+      };
+      const req = mockReq([filePart]);
+      const res = mockRes();
+
+      await expect(controller.extractExif(req as any, res as any)).rejects.toThrow(
+        PayloadTooLargeException,
+      );
     });
   });
 });

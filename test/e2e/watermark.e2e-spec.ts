@@ -232,5 +232,104 @@ describe('Watermark (e2e)', () => {
       const body = JSON.parse(response.body);
       expect(body.message).toMatch(/Watermark file is required/i);
     });
+
+    it('should scale watermark relative to resized dimensions when transform.resize is specified', async () => {
+      const mainImage = await createTestImage(1000, 1000, { r: 255, g: 255, b: 255 });
+      const watermark = await createTestImage(200, 200, { r: 0, g: 0, b: 255 });
+
+      const boundary = '--------------------------watermarktest';
+      const params = {
+        transform: {
+          resize: {
+            width: 100,
+            height: 100,
+          },
+          watermark: {
+            mode: 'single',
+            scale: 50,
+          },
+        },
+        output: { format: 'png' },
+      };
+
+      const payload = createMultipartPayload(boundary, mainImage, watermark, params);
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/v1/process',
+        headers: {
+          'Content-Type': `multipart/form-data; boundary=${boundary}`,
+        },
+        payload,
+      });
+
+      expect(response.statusCode).toBe(200);
+      const resultMetadata = await sharp(response.rawPayload).metadata();
+      expect(resultMetadata.width).toBe(100);
+      expect(resultMetadata.height).toBe(100);
+    });
+
+    it('should return 400 when tiled watermark tile count exceeds limit', async () => {
+      const mainImage = await createTestImage(8000, 8000, { r: 255, g: 255, b: 255 });
+      const watermark = await createTestImage(2000, 10, { r: 0, g: 0, b: 255 });
+
+      const boundary = '--------------------------watermarktest';
+      const params = {
+        transform: {
+          watermark: {
+            mode: 'tile',
+            scale: 1,
+          },
+        },
+        output: { format: 'png' },
+      };
+
+      const payload = createMultipartPayload(boundary, mainImage, watermark, params);
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/v1/process',
+        headers: {
+          'Content-Type': `multipart/form-data; boundary=${boundary}`,
+        },
+        payload,
+      });
+
+      expect(response.statusCode).toBe(400);
+      const body = JSON.parse(response.body);
+      expect(body.message).toMatch(/exceeds limit/i);
+    });
+
+    it('should process small 10x10 image with watermark scale 1% without error', async () => {
+      const mainImage = await createTestImage(10, 10, { r: 255, g: 255, b: 255 });
+      const watermark = await createTestImage(50, 50, { r: 0, g: 0, b: 255 });
+
+      const boundary = '--------------------------watermarktest';
+      const params = {
+        transform: {
+          watermark: {
+            mode: 'single',
+            scale: 1,
+          },
+        },
+        output: { format: 'png' },
+      };
+
+      const payload = createMultipartPayload(boundary, mainImage, watermark, params);
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/v1/process',
+        headers: {
+          'Content-Type': `multipart/form-data; boundary=${boundary}`,
+        },
+        payload,
+      });
+
+      expect(response.statusCode).toBe(200);
+      const resultMetadata = await sharp(response.rawPayload).metadata();
+      expect(resultMetadata.width).toBe(10);
+      expect(resultMetadata.height).toBe(10);
+    });
   });
 });

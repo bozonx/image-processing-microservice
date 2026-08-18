@@ -1,3 +1,5 @@
+import './env.js';
+
 const DEFAULT_SERVICE_NAME = 'image-processing-microservice';
 
 function readOr(value: string | undefined, fallback: string): string {

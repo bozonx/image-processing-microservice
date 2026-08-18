@@ -6,6 +6,7 @@ import {
   Req,
   Res,
   BadRequestException,
+  HttpException,
   PayloadTooLargeException,
   UnsupportedMediaTypeException,
 } from '@nestjs/common';
@@ -58,7 +59,7 @@ export class ImageProcessingController {
 
       return dto;
     } catch (e) {
-      if (e instanceof BadRequestException) {
+      if (e instanceof HttpException) {
         throw e;
       }
       const message = e instanceof Error ? e.message : 'Unknown error';
@@ -106,6 +107,9 @@ export class ImageProcessingController {
         chunks.push(buf);
       }
     } catch (error) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
       const message = error instanceof Error ? error.message : 'Unknown error';
       throw new BadRequestException(`Failed to read upload stream: ${message}`);
     }
@@ -162,7 +166,7 @@ export class ImageProcessingController {
         }
       }
     } catch (error) {
-      if (error instanceof BadRequestException) {
+      if (error instanceof HttpException) {
         throw error;
       }
       const message = error instanceof Error ? error.message : 'Unknown error';
@@ -377,7 +381,7 @@ export class ImageProcessingController {
         }
       }
     } catch (error) {
-      if (error instanceof BadRequestException) {
+      if (error instanceof HttpException) {
         throw error;
       }
       const message = error instanceof Error ? error.message : 'Unknown error';
