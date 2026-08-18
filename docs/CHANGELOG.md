@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Fixed architectural design issues:
+  - Moved multipart parsing in `/process` and `/exif` inside the concurrency-limited queue task, preventing memory exhaustion (10GB potential queue buffering vs 1GB container limit) and achieving memory parity with `/process/raw`.
+  - Removed `await finished(res.raw)` and response delivery from inside queue concurrency tasks across all endpoints, ensuring slow network clients do not hold execution worker slots.
+  - Extracted shared Fastify adapter creation and app bootstrap logic into `src/configure-app.ts` (`configureApp` and `createFastifyAdapter`), eliminating divergence between `src/main.ts` and `test/e2e/test-app.factory.ts` and ensuring UI static asset serving is active in e2e tests.
+  - Consolidated duplicate `normalizeBasePath` implementations into `src/common/http/api-prefix.ts` (`normalizeBasePath`, `buildPrefixedPath`, `buildApiPrefix`, `buildUiPrefix`).
+  - Streamlined Sharp processing in `ImageProcessorService` into a single pipeline pass without creating discarded intermediate pipelines or redundant re-encoding cycles.
+  - Made `uiPrefix` optional in `AuthHookOptions` instead of passing artificial placeholder strings like `/__ui_disabled__`.
+
 - Fixed error handling and validation for Sharp transformations:
   - Added strict DTO validation with `@IsIn` for resize positions and output chromaSubsampling, and color regex matching for `flatten`.
   - Mapped Sharp/libvips processing and input errors (corrupt data, out-of-bounds crop area, unsupported format/colors) to HTTP 400 (`BadRequestException`).

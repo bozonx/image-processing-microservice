@@ -1,79 +1,16 @@
 import { Test } from '@nestjs/testing';
-import { ValidationPipe } from '@nestjs/common';
-import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fastify';
-import { ConfigService } from '@nestjs/config';
+import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { AppModule } from '../../src/app.module.js';
-import type { AuthConfig } from '../../src/config/auth.config.js';
-import { createAuthHook } from '../../src/common/auth/auth.hook.js';
-import { buildApiPrefix } from '../../src/common/http/api-prefix.js';
+import { configureApp, createFastifyAdapter } from '../../src/configure-app.js';
 
 export async function createTestApp(): Promise<NestFastifyApplication> {
   const moduleRef = await Test.createTestingModule({
     imports: [AppModule],
   }).compile();
 
-  const bodyLimitBytes = parseInt(process.env.FILE_MAX_BYTES_MB ?? '25', 10) * 1024 * 1024;
+  const app = moduleRef.createNestApplication<NestFastifyApplication>(createFastifyAdapter());
 
-  const app = moduleRef.createNestApplication<NestFastifyApplication>(
-    new FastifyAdapter({
-      logger: false, // We'll use Pino logger instead
-      bodyLimit: bodyLimitBytes,
-    }),
-  );
-
-  app.useGlobalPipes(
-    new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }),
-  );
-
-  // Ensure defaults the same as in main.ts
-  const basePath = (process.env.BASE_PATH ?? '').replace(/^\/+|\/+$/g, '');
-  const globalPrefix = buildApiPrefix(basePath);
-  app.setGlobalPrefix(globalPrefix);
-
-  const configService = app.get(ConfigService);
-  const imageConfig = configService.get<{ maxBytes: number }>('image');
-  const authConfig = configService.get<(AuthConfig & { bearerTokenList: string[] }) | undefined>(
-    'auth',
-  );
-  const basicUser = authConfig?.basicUser;
-  const basicPass = authConfig?.basicPass;
-  const bearerTokens = authConfig?.bearerTokenList ?? [];
-
-  app
-    .getHttpAdapter()
-    .getInstance()
-    .addHook(
-      'onRequest',
-      createAuthHook({
-        basePath,
-        uiPrefix: '/ui',
-        apiPrefix: '/api/v1',
-        basicUser,
-        basicPass,
-        bearerTokens,
-        publicPaths: ['/api/v1/health'],
-      }),
-    );
-
-  const fastify = app.getHttpAdapter().getInstance();
-
-  fastify.addContentTypeParser(/^image\/.+$/, (req, payload, done) => {
-    done(null, payload);
-  });
-
-  fastify.addContentTypeParser('application/octet-stream', (req, payload, done) => {
-    done(null, payload);
-  });
-
-  const maxFileBytes = imageConfig?.maxBytes ?? bodyLimitBytes;
-
-  await app.register(import('@fastify/multipart'), {
-    limits: {
-      fileSize: maxFileBytes,
-      files: 2,
-      fieldSize: 10 * 1024 * 1024,
-    },
-  });
+  await configureApp(app);
 
   await app.init();
   // Ensure Fastify has completed plugin registration and routing before tests

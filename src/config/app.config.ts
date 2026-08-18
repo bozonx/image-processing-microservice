@@ -1,6 +1,7 @@
 import { registerAs } from '@nestjs/config';
 import { IsInt, IsString, IsIn, Min, Max, validateSync, IsBoolean } from 'class-validator';
 import { plainToClass } from 'class-transformer';
+import { normalizeBasePath } from '../common/http/api-prefix.js';
 
 export class AppConfig {
   @IsBoolean()
@@ -34,7 +35,7 @@ export default registerAs('app', (): AppConfig => {
     enableUi: process.env.ENABLE_UI === 'true',
     port: parseInt(process.env.LISTEN_PORT ?? '8080', 10),
     host: process.env.LISTEN_HOST ?? '0.0.0.0',
-    basePath: (process.env.BASE_PATH ?? '').replace(/^\/+|\/+$/g, ''),
+    basePath: normalizeBasePath(process.env.BASE_PATH),
     nodeEnv: process.env.NODE_ENV ?? 'production',
     logLevel: process.env.LOG_LEVEL ?? 'warn',
     shutdownDrainSeconds: parseInt(process.env.SHUTDOWN_DRAIN_SECONDS ?? '5', 10),

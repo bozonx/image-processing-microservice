@@ -60,18 +60,15 @@ export class ImageProcessorService {
       let pipeline: Sharp;
 
       if (watermark && transform?.watermark) {
-        const inputBuffer = await this.streamToBuffer(inputStream);
-        let prePipeline = sharp(inputBuffer, { ...options, failOn: 'none' });
-        prePipeline = this.applyTransformations(prePipeline, transform);
-        const { data: intermediateBuffer, info } = await prePipeline.toBuffer({
-          resolveWithObject: true,
-        });
+        const inputBuffer = Buffer.isBuffer(inputStream)
+          ? inputStream
+          : await this.streamToBuffer(inputStream);
+        const metadata = await sharp(inputBuffer, options).metadata();
+        const dimensions = this.calculateTransformedDimensions(metadata, transform);
 
-        pipeline = sharp(intermediateBuffer, { failOn: 'none' });
-        await this.applyWatermark(pipeline, watermark.buffer, transform.watermark, {
-          width: info.width,
-          height: info.height,
-        });
+        pipeline = sharp(inputBuffer, { ...options, failOn: 'none' });
+        pipeline = this.applyTransformations(pipeline, transform);
+        await this.applyWatermark(pipeline, watermark.buffer, transform.watermark, dimensions);
       } else {
         pipeline = sharp({ ...options, failOn: 'none' });
         pipeline = this.applyTransformations(pipeline, transform);
@@ -142,6 +139,116 @@ export class ImageProcessorService {
       options.animated = true;
     }
     return options;
+  }
+
+  /**
+   * Calculates the approximate dimensions of the image after transformations (auto-orient, rotate, crop, resize).
+   * Used for watermark scaling and tiling calculations without re-encoding to an intermediate buffer.
+   */
+  private calculateTransformedDimensions(
+    metadata: Metadata,
+    transform?: TransformDto,
+  ): { width: number; height: number } {
+    let width = metadata.width ?? 0;
+    let height = metadata.height ?? 0;
+
+    if (!transform) {
+      if (
+        this.defaults.autoOrient &&
+        metadata.orientation &&
+        metadata.orientation >= 5 &&
+        metadata.orientation <= 8
+      ) {
+        [width, height] = [height, width];
+      }
+      return { width, height };
+    }
+
+    const autoOrient = transform.autoOrient ?? this.defaults.autoOrient;
+    if (
+      autoOrient &&
+      metadata.orientation &&
+      metadata.orientation >= 5 &&
+      metadata.orientation <= 8
+    ) {
+      [width, height] = [height, width];
+    }
+
+    if (transform.rotate !== undefined) {
+      const normalizedRotate = ((transform.rotate % 360) + 360) % 360;
+      if (normalizedRotate === 90 || normalizedRotate === 270) {
+        [width, height] = [height, width];
+      }
+    }
+
+    if (transform.crop) {
+      width = Math.min(width, transform.crop.width);
+      height = Math.min(height, transform.crop.height);
+    }
+
+    if (transform.resize) {
+      const { resize } = transform;
+      if (resize.maxDimension) {
+        const maxDim = resize.maxDimension;
+        const withoutEnlargement = resize.withoutEnlargement ?? true;
+        if (!withoutEnlargement || width > maxDim || height > maxDim) {
+          const scale = Math.min(maxDim / Math.max(width, 1), maxDim / Math.max(height, 1));
+          width = Math.max(1, Math.round(width * scale));
+          height = Math.max(1, Math.round(height * scale));
+        }
+      } else if (resize.width && resize.height) {
+        const fit = resize.fit ?? 'cover';
+        const withoutEnlargement = resize.withoutEnlargement ?? true;
+        if (fit === 'inside') {
+          if (!withoutEnlargement || width > resize.width || height > resize.height) {
+            const scale = Math.min(
+              resize.width / Math.max(width, 1),
+              resize.height / Math.max(height, 1),
+            );
+            width = Math.max(1, Math.round(width * scale));
+            height = Math.max(1, Math.round(height * scale));
+          }
+        } else if (fit === 'outside') {
+          if (!withoutEnlargement || width > resize.width || height > resize.height) {
+            const scale = Math.max(
+              resize.width / Math.max(width, 1),
+              resize.height / Math.max(height, 1),
+            );
+            width = Math.max(1, Math.round(width * scale));
+            height = Math.max(1, Math.round(height * scale));
+          }
+        } else {
+          // cover, contain, fill
+          if (
+            withoutEnlargement &&
+            width < resize.width &&
+            height < resize.height &&
+            fit === 'cover'
+          ) {
+            // Keep current width/height
+          } else {
+            width = resize.width;
+            height = resize.height;
+          }
+        }
+      } else if (resize.width) {
+        const scale = resize.width / Math.max(width, 1);
+        const withoutEnlargement = resize.withoutEnlargement ?? true;
+        if (!withoutEnlargement || resize.width <= width) {
+          width = resize.width;
+          height = Math.max(1, Math.round(height * scale));
+        }
+      } else if (resize.height) {
+        const scale = resize.height / Math.max(height, 1);
+        const withoutEnlargement = resize.withoutEnlargement ?? true;
+        if (!withoutEnlargement || resize.height <= height) {
+          height = resize.height;
+          width = Math.max(1, Math.round(width * scale));
+        }
+      }
+    }
+
+    return { width, height };
   }
 
   /**

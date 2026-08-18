@@ -66,6 +66,31 @@ export class ImageProcessingController {
     }
   }
 
+  private async parseExifParamsFromHeader(req: FastifyRequest): Promise<ExtractExifDto> {
+    const raw = this.getHeaderValue(req.headers['x-img-params']);
+    if (!raw) {
+      return new ExtractExifDto();
+    }
+
+    try {
+      const parsed = JSON.parse(raw);
+      const dto = plainToInstance(ExtractExifDto, parsed);
+
+      const errors = await validate(dto);
+      if (errors.length > 0) {
+        throw new BadRequestException(formatValidationErrors(errors));
+      }
+
+      return dto;
+    } catch (e) {
+      if (e instanceof HttpException) {
+        throw e;
+      }
+      const message = e instanceof Error ? e.message : 'Unknown error';
+      throw new BadRequestException(`Invalid x-img-params: ${message}`);
+    }
+  }
+
   private createMaxBytesTransform(maxBytes?: number): Transform {
     let totalLength = 0;
 
@@ -132,73 +157,87 @@ export class ImageProcessingController {
       throw new BadRequestException('Invalid content type, expected multipart/form-data');
     }
 
-    // Process multiple files (main file and optional watermark)
-    const parts = req.parts();
-    let mainFileData: { buffer: Buffer; mimetype: string } | null = null;
-    let watermarkFileData: { buffer: Buffer; mimetype: string } | null = null;
-    let dto = new ProcessImageDto();
-
-    try {
-      for await (const part of parts) {
-        if (part.type === 'file') {
-          const buffer = await this.readStreamToBuffer(part.file, this.getMaxBytes());
-
-          if (part.fieldname === 'file') {
-            mainFileData = { buffer, mimetype: part.mimetype };
-          } else if (part.fieldname === 'watermark') {
-            watermarkFileData = { buffer, mimetype: part.mimetype };
-          }
-        } else if (part.type === 'field' && part.fieldname === 'params') {
-          try {
-            const fieldValue = part.value as string;
-            const parsed = JSON.parse(fieldValue);
-            dto = plainToInstance(ProcessImageDto, parsed);
-
-            const errors = await validate(dto);
-            if (errors.length > 0) {
-              throw new BadRequestException(formatValidationErrors(errors));
-            }
-          } catch (e) {
-            const message = e instanceof Error ? e.message : 'Unknown error';
-            throw new BadRequestException(`Invalid params: ${message}`);
-          }
-        }
-      }
-    } catch (error) {
-      if (error instanceof HttpException) {
-        throw error;
-      }
-      const message = error instanceof Error ? error.message : 'Unknown error';
-      throw new BadRequestException(`Failed to process multipart payload: ${message}`);
-    }
-
-    if (!mainFileData) {
-      throw new BadRequestException('No file uploaded');
-    }
-
-    // Validate watermark: if watermark config is provided, watermark file is required
-    if (dto.transform?.watermark && !watermarkFileData) {
-      throw new BadRequestException('Watermark file is required when watermark config is provided');
-    }
-
-    const priority = dto.priority ?? 2;
+    const headerDto = await this.parseProcessParamsFromHeader(req);
+    const priority = headerDto.priority ?? 2;
 
     let isClientDisconnected = false;
     const abortController = new AbortController();
     const onClientClose = () => {
-      if (req.raw.destroyed || res.raw.destroyed || !req.raw.complete) {
+      if (req.raw?.destroyed || res.raw?.destroyed || !req.raw?.complete) {
         isClientDisconnected = true;
         abortController.abort();
       }
     };
 
-    req.raw.on('close', onClientClose);
-    res.raw.on('close', onClientClose);
+    req.raw?.on?.('close', onClientClose);
+    res.raw?.on?.('close', onClientClose);
 
     try {
       const result = await this.queueService.add(
-        signal =>
-          this.imageProcessor.processStream(
+        async signal => {
+          if (signal.aborted) {
+            throw new Error('Request aborted');
+          }
+
+          // Process multipart parts inside the queue concurrency slot
+          const parts = req.parts();
+          let mainFileData: { buffer: Buffer; mimetype: string } | null = null;
+          let watermarkFileData: { buffer: Buffer; mimetype: string } | null = null;
+          let dto = headerDto;
+
+          try {
+            for await (const part of parts) {
+              if (signal.aborted) {
+                throw new Error('Request aborted');
+              }
+
+              if (part.type === 'file') {
+                const buffer = await this.readStreamToBuffer(part.file, this.getMaxBytes());
+
+                if (part.fieldname === 'file') {
+                  mainFileData = { buffer, mimetype: part.mimetype };
+                } else if (part.fieldname === 'watermark') {
+                  watermarkFileData = { buffer, mimetype: part.mimetype };
+                }
+              } else if (part.type === 'field' && part.fieldname === 'params') {
+                try {
+                  const fieldValue = part.value as string;
+                  const parsed = JSON.parse(fieldValue);
+                  dto = plainToInstance(ProcessImageDto, parsed);
+
+                  const errors = await validate(dto);
+                  if (errors.length > 0) {
+                    throw new BadRequestException(formatValidationErrors(errors));
+                  }
+                } catch (e) {
+                  if (e instanceof HttpException) {
+                    throw e;
+                  }
+                  const message = e instanceof Error ? e.message : 'Unknown error';
+                  throw new BadRequestException(`Invalid params: ${message}`);
+                }
+              }
+            }
+          } catch (error) {
+            if (error instanceof HttpException) {
+              throw error;
+            }
+            const message = error instanceof Error ? error.message : 'Unknown error';
+            throw new BadRequestException(`Failed to process multipart payload: ${message}`);
+          }
+
+          if (!mainFileData) {
+            throw new BadRequestException('No file uploaded');
+          }
+
+          // Validate watermark: if watermark config is provided, watermark file is required
+          if (dto.transform?.watermark && !watermarkFileData) {
+            throw new BadRequestException(
+              'Watermark file is required when watermark config is provided',
+            );
+          }
+
+          return await this.imageProcessor.processStream(
             Readable.from(mainFileData.buffer),
             mainFileData.mimetype,
             dto.transform,
@@ -210,7 +249,8 @@ export class ImageProcessingController {
                 }
               : undefined,
             signal,
-          ),
+          );
+        },
         priority,
         abortController.signal,
       );
@@ -224,13 +264,20 @@ export class ImageProcessingController {
 
       return res.send(result.buffer);
     } catch (error) {
-      if (isClientDisconnected || res.raw.destroyed || res.raw.writableEnded) {
+      if (
+        isClientDisconnected ||
+        abortController.signal.aborted ||
+        res.raw?.destroyed ||
+        res.raw?.writableEnded ||
+        (error instanceof Error &&
+          (error.message === 'Request aborted' || error.message === 'The operation was aborted'))
+      ) {
         return;
       }
       throw error;
     } finally {
-      req.raw.removeListener('close', onClientClose);
-      res.raw.removeListener('close', onClientClose);
+      req.raw?.removeListener?.('close', onClientClose);
+      res.raw?.removeListener?.('close', onClientClose);
     }
   }
 
@@ -278,7 +325,7 @@ export class ImageProcessingController {
     };
 
     const onClientClose = () => {
-      if (req.raw.destroyed || res.raw.destroyed || !req.raw.complete) {
+      if (req.raw?.destroyed || res.raw?.destroyed || !req.raw?.complete) {
         isClientDisconnected = true;
         abortController.abort();
         cleanup();
@@ -291,9 +338,9 @@ export class ImageProcessingController {
       cleanup();
     };
 
-    req.raw.on('close', onClientClose);
-    res.raw.on('close', onClientClose);
-    res.raw.on('error', onClientError);
+    req.raw?.on?.('close', onClientClose);
+    res.raw?.on?.('close', onClientClose);
+    res.raw?.on?.('error', onClientError);
 
     try {
       const result = await this.queueService.add(
@@ -319,14 +366,21 @@ export class ImageProcessingController {
 
       return res.send(result.buffer);
     } catch (error) {
-      if (isClientDisconnected || res.raw.destroyed || res.raw.writableEnded) {
+      if (
+        isClientDisconnected ||
+        abortController.signal.aborted ||
+        res.raw?.destroyed ||
+        res.raw?.writableEnded ||
+        (error instanceof Error &&
+          (error.message === 'Request aborted' || error.message === 'The operation was aborted'))
+      ) {
         return;
       }
       throw error;
     } finally {
-      req.raw.removeListener('close', onClientClose);
-      res.raw.removeListener('close', onClientClose);
-      res.raw.removeListener('error', onClientError);
+      req.raw?.removeListener?.('close', onClientClose);
+      res.raw?.removeListener?.('close', onClientClose);
+      res.raw?.removeListener?.('error', onClientError);
       cleanup();
     }
   }
@@ -346,81 +400,102 @@ export class ImageProcessingController {
       throw new BadRequestException('Invalid content type, expected multipart/form-data');
     }
 
-    const parts = req.parts();
-    let fileData: { buffer: Buffer; mimetype: string } | null = null;
-    let dto = new ExtractExifDto();
+    const headerDto = await this.parseExifParamsFromHeader(req);
+    const priority = headerDto.priority ?? 2;
 
-    try {
-      for await (const part of parts) {
-        if (part.type === 'file' && part.fieldname === 'file') {
-          const buffer = await this.readStreamToBuffer(part.file, this.getMaxBytes());
-          fileData = { buffer, mimetype: part.mimetype };
-        } else if (part.type === 'field' && part.fieldname === 'params') {
-          try {
-            const fieldValue = part.value as string;
-            const parsed = JSON.parse(fieldValue);
-            dto = plainToInstance(ExtractExifDto, parsed);
-
-            const errors = await validate(dto);
-            if (errors.length > 0) {
-              throw new BadRequestException(formatValidationErrors(errors));
-            }
-          } catch (e) {
-            const message = e instanceof Error ? e.message : 'Unknown error';
-            throw new BadRequestException(`Invalid params: ${message}`);
-          }
-        }
-      }
-    } catch (error) {
-      if (error instanceof HttpException) {
-        throw error;
-      }
-      const message = error instanceof Error ? error.message : 'Unknown error';
-      throw new BadRequestException(`Failed to process multipart payload: ${message}`);
-    }
-
-    if (!fileData) {
-      throw new BadRequestException('No file uploaded');
-    }
-
-    const priority = dto.priority ?? 2;
     let isClientDisconnected = false;
     const abortController = new AbortController();
 
     const onClientClose = () => {
-      if (req.raw.destroyed || res.raw.destroyed || !req.raw.complete) {
+      if (req.raw?.destroyed || res.raw?.destroyed || !req.raw?.complete) {
         isClientDisconnected = true;
         abortController.abort();
       }
     };
 
-    req.raw.on('close', onClientClose);
-    res.raw.on('close', onClientClose);
+    req.raw?.on?.('close', onClientClose);
+    res.raw?.on?.('close', onClientClose);
 
     try {
-      const rawExif = await this.queueService.add(
-        () => this.exifService.extract(fileData.buffer, fileData.mimetype),
+      const responseBody = await this.queueService.add(
+        async signal => {
+          if (signal.aborted) {
+            throw new Error('Request aborted');
+          }
+
+          const parts = req.parts();
+          let fileData: { buffer: Buffer; mimetype: string } | null = null;
+
+          try {
+            for await (const part of parts) {
+              if (signal.aborted) {
+                throw new Error('Request aborted');
+              }
+
+              if (part.type === 'file' && part.fieldname === 'file') {
+                const buffer = await this.readStreamToBuffer(part.file, this.getMaxBytes());
+                fileData = { buffer, mimetype: part.mimetype };
+              } else if (part.type === 'field' && part.fieldname === 'params') {
+                try {
+                  const fieldValue = part.value as string;
+                  const parsed = JSON.parse(fieldValue);
+                  const dto = plainToInstance(ExtractExifDto, parsed);
+
+                  const errors = await validate(dto);
+                  if (errors.length > 0) {
+                    throw new BadRequestException(formatValidationErrors(errors));
+                  }
+                } catch (e) {
+                  if (e instanceof HttpException) {
+                    throw e;
+                  }
+                  const message = e instanceof Error ? e.message : 'Unknown error';
+                  throw new BadRequestException(`Invalid params: ${message}`);
+                }
+              }
+            }
+          } catch (error) {
+            if (error instanceof HttpException) {
+              throw error;
+            }
+            const message = error instanceof Error ? error.message : 'Unknown error';
+            throw new BadRequestException(`Failed to process multipart payload: ${message}`);
+          }
+
+          if (!fileData) {
+            throw new BadRequestException('No file uploaded');
+          }
+
+          const rawExif = await this.exifService.extract(fileData.buffer, fileData.mimetype);
+
+          const { width, height, ...exif } = rawExif ?? {};
+          return {
+            exif: Object.keys(exif).length > 0 ? exif : null,
+            width: typeof width === 'number' ? width : undefined,
+            height: typeof height === 'number' ? height : undefined,
+          };
+        },
         priority,
         abortController.signal,
       );
 
-      const { width, height, ...exif } = rawExif ?? {};
-      const responseBody = {
-        exif: Object.keys(exif).length > 0 ? exif : null,
-        width: typeof width === 'number' ? width : undefined,
-        height: typeof height === 'number' ? height : undefined,
-      };
-
       res.send(responseBody);
       return responseBody;
     } catch (error) {
-      if (isClientDisconnected || res.raw.destroyed || res.raw.writableEnded) {
+      if (
+        isClientDisconnected ||
+        abortController.signal.aborted ||
+        res.raw?.destroyed ||
+        res.raw?.writableEnded ||
+        (error instanceof Error &&
+          (error.message === 'Request aborted' || error.message === 'The operation was aborted'))
+      ) {
         return;
       }
       throw error;
     } finally {
-      req.raw.removeListener('close', onClientClose);
-      res.raw.removeListener('close', onClientClose);
+      req.raw?.removeListener?.('close', onClientClose);
+      res.raw?.removeListener?.('close', onClientClose);
     }
   }
 }

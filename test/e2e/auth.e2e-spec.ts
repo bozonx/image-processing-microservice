@@ -12,6 +12,7 @@ describe('Auth (e2e)', () => {
     AUTH_BASIC_USER: process.env.AUTH_BASIC_USER,
     AUTH_BASIC_PASS: process.env.AUTH_BASIC_PASS,
     AUTH_BEARER_TOKENS: process.env.AUTH_BEARER_TOKENS,
+    ENABLE_UI: process.env.ENABLE_UI,
   };
 
   afterEach(async () => {
@@ -22,6 +23,7 @@ describe('Auth (e2e)', () => {
     process.env.AUTH_BASIC_USER = originalEnv.AUTH_BASIC_USER;
     process.env.AUTH_BASIC_PASS = originalEnv.AUTH_BASIC_PASS;
     process.env.AUTH_BEARER_TOKENS = originalEnv.AUTH_BEARER_TOKENS;
+    process.env.ENABLE_UI = originalEnv.ENABLE_UI;
   });
 
   describe('no auth configured', () => {
@@ -29,6 +31,7 @@ describe('Auth (e2e)', () => {
       delete process.env.AUTH_BASIC_USER;
       delete process.env.AUTH_BASIC_PASS;
       delete process.env.AUTH_BEARER_TOKENS;
+      process.env.ENABLE_UI = 'true';
 
       app = await createTestApp();
     });
@@ -48,8 +51,7 @@ describe('Auth (e2e)', () => {
         url: '/ui/index.html',
       });
 
-      // UI static might not be registered in tests; accept 200 or 404, but not 401
-      expect([200, 404]).toContain(response.statusCode);
+      expect(response.statusCode).toBe(200);
     });
   });
 
@@ -60,6 +62,7 @@ describe('Auth (e2e)', () => {
     beforeEach(async () => {
       process.env.AUTH_BASIC_USER = user;
       process.env.AUTH_BASIC_PASS = pass;
+      process.env.ENABLE_UI = 'true';
       delete process.env.AUTH_BEARER_TOKENS;
 
       app = await createTestApp();
@@ -104,8 +107,7 @@ describe('Auth (e2e)', () => {
         },
       });
 
-      // UI static might not be registered in tests; accept 200 or 404, but not 401
-      expect([200, 404]).toContain(response.statusCode);
+      expect(response.statusCode).toBe(200);
     });
   });
 
@@ -116,6 +118,7 @@ describe('Auth (e2e)', () => {
       delete process.env.AUTH_BASIC_USER;
       delete process.env.AUTH_BASIC_PASS;
       process.env.AUTH_BEARER_TOKENS = `${token1}, token2`;
+      process.env.ENABLE_UI = 'true';
 
       app = await createTestApp();
     });
@@ -147,8 +150,26 @@ describe('Auth (e2e)', () => {
         url: '/ui/index.html',
       });
 
-      // UI static might not be registered in tests; accept 200 or 404, but not 401
-      expect([200, 404]).toContain(response.statusCode);
+      expect(response.statusCode).toBe(200);
+    });
+  });
+
+  describe('ui disabled', () => {
+    beforeEach(async () => {
+      process.env.AUTH_BASIC_USER = 'user1';
+      process.env.AUTH_BASIC_PASS = 'pass1';
+      delete process.env.ENABLE_UI;
+
+      app = await createTestApp();
+    });
+
+    it('returns 404 for UI path when UI is disabled', async () => {
+      const response = await app.inject({
+        method: 'GET',
+        url: '/ui/index.html',
+      });
+
+      expect(response.statusCode).toBe(404);
     });
   });
 });

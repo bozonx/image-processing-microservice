@@ -1,23 +1,14 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
+import { buildPrefixedPath } from '../http/api-prefix.js';
 
 export interface AuthHookOptions {
   basePath: string;
-  uiPrefix: string;
+  uiPrefix?: string;
   apiPrefix: string;
   basicUser?: string;
   basicPass?: string;
   bearerTokens: string[];
   publicPaths?: string[];
-}
-
-function normalizeBasePath(basePath: string): string {
-  return (basePath ?? '').replace(/^\/+|\/+$/g, '');
-}
-
-function buildPrefixedPath(basePath: string, path: string): string {
-  const b = normalizeBasePath(basePath);
-  if (!b) return path;
-  return `/${b}${path.startsWith('/') ? '' : '/'}${path.replace(/^\/+/, '')}`;
 }
 
 function unauthorized(res: FastifyReply, allowBasic: boolean, allowBearer: boolean): void {
@@ -69,7 +60,9 @@ function isBearerValid(authHeader: string, tokens: string[]): boolean {
 
 export function createAuthHook(options: AuthHookOptions) {
   const apiPrefix = buildPrefixedPath(options.basePath, options.apiPrefix);
-  const uiPrefix = buildPrefixedPath(options.basePath, options.uiPrefix);
+  const uiPrefix = options.uiPrefix
+    ? buildPrefixedPath(options.basePath, options.uiPrefix)
+    : undefined;
 
   const basicUser = options.basicUser;
   const basicPass = options.basicPass;
@@ -95,7 +88,7 @@ export function createAuthHook(options: AuthHookOptions) {
     }
 
     const isApi = url.startsWith(apiPrefix);
-    const isUi = url.startsWith(uiPrefix);
+    const isUi = uiPrefix ? url.startsWith(uiPrefix) : false;
 
     if (!isApi && !isUi) return;
 
