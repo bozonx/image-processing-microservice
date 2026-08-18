@@ -20,35 +20,16 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = join(__filename, '..');
 
 async function bootstrap() {
-  // Create temporary app to get config (using minimal Fastify adapter)
-  const tempApp = await NestFactory.create(AppModule, new FastifyAdapter({ logger: false }), {
-    logger: false,
-  });
-  const configService = tempApp.get(ConfigService);
-  const imageConfig = configService.get<{ maxBytes: number }>('image');
-  const appConfig = configService.get<AppConfig>('app');
-  const authConfig = configService.get<(AuthConfig & { bearerTokenList: string[] }) | undefined>(
-    'auth',
-  );
-
-  if (!imageConfig || !appConfig) {
-    throw new Error('Config not found');
-  }
-
-  // Body limit should match raw binary uploads; multipart is handled by @fastify/multipart limits
-  const bodyLimitBytes = imageConfig.maxBytes;
-  await tempApp.close();
+  const bodyLimitBytes = parseInt(process.env.FILE_MAX_BYTES_MB ?? '100', 10) * 1024 * 1024;
 
   // Create app with bufferLogs enabled to capture early logs
   const app = await NestFactory.create<NestFastifyApplication>(
     AppModule,
     new FastifyAdapter({
-      // We'll use Pino logger instead
       logger: false,
       bodyLimit: bodyLimitBytes,
       forceCloseConnections: true,
-      closeTimeout: Math.max(appConfig.shutdownDrainSeconds * 1000, 1000),
-    } as any),
+    }),
     {
       bufferLogs: true,
     },
@@ -58,6 +39,12 @@ async function bootstrap() {
   app.useLogger(app.get(Logger));
 
   const logger = app.get(Logger);
+  const configService = app.get(ConfigService);
+  const appConfig = configService.getOrThrow<AppConfig>('app');
+  const imageConfig = configService.getOrThrow<{ maxBytes: number }>('image');
+  const authConfig = configService.get<(AuthConfig & { bearerTokenList: string[] }) | undefined>(
+    'auth',
+  );
 
   app.useGlobalPipes(
     new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }),

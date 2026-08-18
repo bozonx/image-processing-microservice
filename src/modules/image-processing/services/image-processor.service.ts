@@ -24,11 +24,12 @@ export class ImageProcessorService {
   private readonly logger = new Logger(ImageProcessorService.name);
   private readonly maxBytes: number;
   private readonly defaults: ImageDefaults;
+  private readonly imageConfig: ImageConfig;
 
   constructor(private readonly configService: ConfigService) {
-    const config = this.configService.get<ImageConfig>('image')!;
-    this.maxBytes = config.maxBytes;
-    this.defaults = config.defaults;
+    this.imageConfig = this.configService.getOrThrow<ImageConfig>('image');
+    this.maxBytes = this.imageConfig.maxBytes;
+    this.defaults = this.imageConfig.defaults;
   }
 
   /**
@@ -216,7 +217,7 @@ export class ImageProcessorService {
       pipeline = pipeline.withMetadata({ orientation: undefined });
     }
 
-    const config = this.configService.get<ImageConfig>('image')!;
+    const config = this.imageConfig;
 
     switch (format) {
       case 'webp':

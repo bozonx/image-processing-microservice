@@ -71,11 +71,13 @@ export function createAuthHook(options: AuthHookOptions) {
   const apiPrefix = buildPrefixedPath(options.basePath, options.apiPrefix);
   const uiPrefix = buildPrefixedPath(options.basePath, options.uiPrefix);
 
+  const basicUser = options.basicUser;
+  const basicPass = options.basicPass;
   const basicEnabled =
-    typeof options.basicUser === 'string' &&
-    options.basicUser.length > 0 &&
-    typeof options.basicPass === 'string' &&
-    options.basicPass.length > 0;
+    typeof basicUser === 'string' &&
+    basicUser.length > 0 &&
+    typeof basicPass === 'string' &&
+    basicPass.length > 0;
 
   const bearerEnabled = options.bearerTokens.length > 0;
 
@@ -113,27 +115,27 @@ export function createAuthHook(options: AuthHookOptions) {
         return;
       }
 
-      const ok =
-        (basicEnabled && isBasicValid(authHeader, options.basicUser!, options.basicPass!)) ||
-        (bearerEnabled && isBearerValid(authHeader, options.bearerTokens));
+      const isBasicOk =
+        basicEnabled &&
+        typeof basicUser === 'string' &&
+        typeof basicPass === 'string' &&
+        isBasicValid(authHeader, basicUser, basicPass);
 
-      if (!ok) {
+      const isBearerOk = bearerEnabled && isBearerValid(authHeader, options.bearerTokens);
+
+      if (!isBasicOk && !isBearerOk) {
         unauthorized(res, basicEnabled, bearerEnabled);
       }
       return;
     }
 
     // UI: only Basic (Bearer does not apply to UI)
-    if (!basicEnabled) {
+    if (!basicEnabled || typeof basicUser !== 'string' || typeof basicPass !== 'string') {
       return;
     }
 
     const authHeader = parseAuthorizationHeader(req);
-    if (
-      basicEnabled &&
-      authHeader &&
-      isBasicValid(authHeader, options.basicUser!, options.basicPass!)
-    ) {
+    if (authHeader && isBasicValid(authHeader, basicUser, basicPass)) {
       return;
     }
 

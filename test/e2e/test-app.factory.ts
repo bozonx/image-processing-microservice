@@ -31,6 +31,7 @@ export async function createTestApp(): Promise<NestFastifyApplication> {
   app.setGlobalPrefix(globalPrefix);
 
   const configService = app.get(ConfigService);
+  const imageConfig = configService.get<{ maxBytes: number }>('image');
   const authConfig = configService.get<(AuthConfig & { bearerTokenList: string[] }) | undefined>(
     'auth',
   );
@@ -64,11 +65,13 @@ export async function createTestApp(): Promise<NestFastifyApplication> {
     done(null, payload);
   });
 
+  const maxFileBytes = imageConfig?.maxBytes ?? bodyLimitBytes;
+
   await app.register(import('@fastify/multipart'), {
     limits: {
-      fileSize: 25 * 1024 * 1024, // 25MB default for tests
+      fileSize: maxFileBytes,
       files: 2,
-      fieldSize: 1024 * 1024, // 1MB for params field
+      fieldSize: 10 * 1024 * 1024,
     },
   });
 

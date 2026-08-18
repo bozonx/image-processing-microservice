@@ -14,7 +14,7 @@ export class ExifService {
   private readonly maxBytes: number;
 
   constructor(private readonly configService: ConfigService) {
-    const config = this.configService.get<ImageConfig>('image')!;
+    const config = this.configService.getOrThrow<ImageConfig>('image');
     this.maxBytes = config.maxBytes;
   }
 
@@ -28,7 +28,7 @@ export class ExifService {
   public async extract(
     input: Readable | Buffer,
     mimeType: string,
-  ): Promise<Record<string, any> | null> {
+  ): Promise<Record<string, unknown> | null> {
     const startTime = Date.now();
 
     try {

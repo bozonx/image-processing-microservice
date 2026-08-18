@@ -24,7 +24,7 @@ export class QueueService implements OnModuleDestroy {
   private isShuttingDown = false;
 
   constructor(private readonly configService: ConfigService) {
-    const config = this.configService.get<ImageConfig>('image')!;
+    const config = this.configService.getOrThrow<ImageConfig>('image');
     const { maxConcurrency, timeout, requestTimeout, maxQueueSize } = config.queue;
 
     this.requestTimeout = requestTimeout;

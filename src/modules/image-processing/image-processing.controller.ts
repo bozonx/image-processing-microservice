@@ -97,7 +97,7 @@ export class ImageProcessingController {
     let totalLength = 0;
 
     try {
-      for await (const chunk of stream as any as AsyncIterable<Buffer>) {
+      for await (const chunk of stream as AsyncIterable<Uint8Array | string | Buffer>) {
         const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
         totalLength += buf.length;
         if (typeof maxBytes === 'number' && totalLength > maxBytes) {
@@ -404,16 +404,13 @@ export class ImageProcessingController {
             throw new Error('Request aborted');
           }
 
-          const rawExif = (await this.exifService.extract(
-            fileData.buffer,
-            fileData.mimetype,
-          )) as any;
+          const rawExif = await this.exifService.extract(fileData.buffer, fileData.mimetype);
 
           const { width, height, ...exif } = rawExif ?? {};
           const responseBody = {
             exif: Object.keys(exif).length > 0 ? exif : null,
-            width,
-            height,
+            width: typeof width === 'number' ? width : undefined,
+            height: typeof height === 'number' ? height : undefined,
           };
 
           res.send(responseBody);
