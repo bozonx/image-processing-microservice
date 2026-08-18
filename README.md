@@ -41,10 +41,27 @@ changes health to `/images/api/v1/health`.
 `LISTEN_PORT`, `BASE_PATH`, `ENABLE_UI`, `FILE_MAX_BYTES_MB`, `MAX_CONCURRENCY`, queue timeouts and
 optional `AUTH_BASIC_*` or `AUTH_BEARER_TOKENS` credentials. Health always remains public.
 
-## Development
+# Deployment
 
-Use `pnpm check` for the same typecheck, lint, formatting and unit-test gate as CI. Run integration
-tests with `pnpm test:e2e`. See [docs/dev.md](docs/dev.md) and [docs/deploy.md](docs/deploy.md).
+Build the production image with `pnpm docker:build`. The multi-stage Dockerfile compiles from a
+clean source tree and runs as the unprivileged `node` user. `APP_VERSION` is injected as
+`SERVICE_VERSION` and appears in the health response.
+
+Create `.env` from `.env.example`, then run `pnpm docker:up`. Compose enables init, graceful stop,
+log rotation, a memory limit and a dependency-free health probe. In an orchestrator, supply
+environment variables through its secret/configuration mechanism instead of copying `.env` into
+the image.
+
+# Development
+
+Use Node.js from `.nvmrc`, enable Corepack, then run `pnpm install`. Copy `.env.example` to `.env`
+and start watch mode with `pnpm dev`. The committed example is the source of truth; do not create
+environment-specific dotenv files.
+
+Before submitting changes, run `pnpm check` and `pnpm test:e2e`. Use `pnpm format` and
+`pnpm lint:fix` for automatic fixes. Image processing is CPU- and memory-intensive, so test large
+inputs and queue saturation when changing Sharp pipelines or limits.
+
 
 ## License
 
