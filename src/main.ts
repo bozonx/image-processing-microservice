@@ -109,7 +109,7 @@ async function bootstrap() {
   });
 
   // Register static files serving for UI
-  const publicPath = join(__dirname, '..', '..', 'public');
+  const publicPath = join(__dirname, '..', 'public');
   const uiPrefix = appConfig.basePath ? `/${appConfig.basePath}/ui` : '/ui';
   if (appConfig.enableUi) {
     await app.register(fastifyStatic, {

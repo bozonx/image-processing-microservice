@@ -13,7 +13,6 @@ RUN --mount=type=cache,id=pnpm-store,target=/root/.local/share/pnpm/store \
 FROM deps AS build
 COPY tsconfig.json tsconfig.build.json nest-cli.json ./
 COPY src ./src
-COPY public ./public
 RUN pnpm build && pnpm prune --prod
 
 FROM node:${NODE_MAJOR}-bookworm-slim AS runtime
@@ -27,7 +26,7 @@ ENV NODE_ENV=production \
   SERVICE_VERSION=${APP_VERSION}
 COPY --from=build --chown=node:node /app/node_modules ./node_modules
 COPY --from=build --chown=node:node /app/dist ./dist
-COPY --from=build --chown=node:node /app/public ./public
+COPY --chown=node:node public ./public
 COPY --chown=node:node package.json ./
 USER node
 EXPOSE 8080

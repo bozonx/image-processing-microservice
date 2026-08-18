@@ -20,7 +20,7 @@ import { ExifService } from './services/exif.service.js';
 import { QueueService } from './services/queue.service.js';
 import { ProcessImageDto } from './dto/process-image.dto.js';
 import { ExtractExifDto } from './dto/exif.dto.js';
-import { formatValidationErrors } from '../../utils/validation-errors.js';
+import { formatValidationErrors } from '../../common/utils/validation-errors.js';
 import type { ImageConfig } from '../../config/image.config.js';
 
 /**

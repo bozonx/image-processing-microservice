@@ -12,9 +12,10 @@ services:
     init: true
     stop_grace_period: 30s
     ports:
-      - '${LISTEN_PORT:-8080}:8080'
+      - '${LISTEN_PORT:-8080}:${LISTEN_PORT:-8080}'
     env_file:
-      - ../.env
+      - path: ../.env
+        required: false
     environment:
       TZ: ${TZ:-UTC}
       LOG_LEVEL: ${LOG_LEVEL:-warn}
@@ -27,16 +28,4 @@ services:
       resources:
         limits:
           memory: 1G
-    healthcheck:
-      test:
-        [
-          'CMD',
-          'node',
-          '-e',
-          "const b=(process.env.BASE_PATH||'').replace(/^\\/+|\\/+$/g,'');const p='/'+(b?b+'/':'')+'api/v1/health';require('http').get('http://127.0.0.1:8080'+p,r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))",
-        ]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
     # Stateless service: image data is streamed and no persistent volume is needed.

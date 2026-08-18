@@ -32,8 +32,30 @@ Run the compiled service with `pnpm build && pnpm start`. Run the container with
 | `POST` | `/api/v1/process/raw` | Process an image supplied as the raw request body |
 | `POST` | `/api/v1/exif` | Extract image dimensions and EXIF metadata |
 
+### Endpoints and usage
+
+- **`POST /api/v1/process`**
+  - Accepts `multipart/form-data` with:
+    - `file`: Source image file/stream (required).
+    - `watermark`: Watermark image file/stream (optional, required if `transform.watermark` config is present).
+    - `params`: JSON string with transformation options, output format, and queue priority.
+- **`POST /api/v1/process/raw`**
+  - Accepts raw image stream in the request body (`Content-Type: image/*` or `application/octet-stream`).
+  - Processing parameters are passed as a JSON string via the `x-img-params` header. Watermark is not supported on this endpoint.
+- **`POST /api/v1/exif`**
+  - Accepts `multipart/form-data` with `file` and optional `params` JSON (priority). Returns `{ width, height, exif }`.
+
+### Processing options
+
+Parameters JSON supports:
+- **`transform`**: `resize` (`width`, `height`, `maxDimension`, `fit`, `withoutEnlargement`, `position`), `crop` (`left`, `top`, `width`, `height`), `rotate` (-360 to 360), `autoOrient`, `flip`, `flop`, `flatten`, `watermark` (`position`, `opacity`, `scale`, `mode`, `spacing`).
+- **`output`**: `format` (`webp`, `avif`, `jpeg`, `png`, `gif`, `tiff`, `raw`), `quality` (1-100), `lossless`, `effort`, `progressive`, `mozjpeg`, `stripMetadata`, etc.
+- **`priority`**: Queue priority (`0` = high, `1` = normal, `2` = low).
+
+Processed responses return dimensions and sizes in response headers: `X-Image-Width`, `X-Image-Height`, `X-Image-Size`, and `Content-Disposition`.
+
 Set `BASE_PATH` to place all endpoints below a proxy prefix. For example, `BASE_PATH=images`
-changes health to `/images/api/v1/health`.
+changes health to `/images/api/v1/health` and UI to `/images/ui`.
 
 ## Configuration
 
@@ -41,7 +63,7 @@ changes health to `/images/api/v1/health`.
 `LISTEN_PORT`, `BASE_PATH`, `ENABLE_UI`, `FILE_MAX_BYTES_MB`, `MAX_CONCURRENCY`, queue timeouts and
 optional `AUTH_BASIC_*` or `AUTH_BEARER_TOKENS` credentials. Health always remains public.
 
-# Deployment
+## Deployment
 
 Build the production image with `pnpm docker:build`. The multi-stage Dockerfile compiles from a
 clean source tree and runs as the unprivileged `node` user. `APP_VERSION` is injected as
@@ -52,7 +74,7 @@ log rotation, a memory limit and a dependency-free health probe. In an orchestra
 environment variables through its secret/configuration mechanism instead of copying `.env` into
 the image.
 
-# Development
+## Development
 
 Use Node.js from `.nvmrc`, enable Corepack, then run `pnpm install`. Copy `.env.example` to `.env`
 and start watch mode with `pnpm dev`. The committed example is the source of truth; do not create
@@ -61,7 +83,6 @@ environment-specific dotenv files.
 Before submitting changes, run `pnpm validate:all` (or `pnpm check`, `pnpm test:unit`, and `pnpm test:e2e`).
 Use `pnpm format` and `pnpm lint:fix` for automatic fixes. Image processing is CPU- and memory-intensive,
 so test large inputs and queue saturation when changing Sharp pipelines or limits.
-
 
 ## License
 
