@@ -1,4 +1,4 @@
-# Fleet-wide formatting defaults.
+# Prettier configuration. YAML rather than JSON so options can carry a reason.
 singleQuote: true
 trailingComma: all
 tabWidth: 2
@@ -7,8 +7,10 @@ printWidth: 100
 endOfLine: lf
 bracketSpacing: true
 bracketSameLine: false
+# Single-argument arrows read better without parentheses in this codebase.
 arrowParens: avoid
 quoteProps: as-needed
+# Markdown is hand-wrapped; reflowing it produces noisy diffs.
 proseWrap: preserve
 htmlWhitespaceSensitivity: css
 embeddedLanguageFormatting: auto

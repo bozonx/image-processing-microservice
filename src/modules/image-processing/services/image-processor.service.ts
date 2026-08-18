@@ -5,8 +5,10 @@ import type { Metadata, OverlayOptions, Sharp, SharpOptions } from 'sharp';
 import { Readable } from 'node:stream';
 import { TransformDto, OutputDto, WatermarkDto } from '../dto/process-image.dto.js';
 import type { ImageDefaults, ImageConfig } from '../../../config/image.config.js';
+import { isAbortError, RequestAbortedError } from '../client-connection.js';
 
-interface ProcessResult {
+/** A processed image and the metadata the response headers describe it with. */
+export interface ProcessResult {
   buffer: Buffer;
   mimeType: string;
   extension: string;
@@ -62,9 +64,9 @@ export class ImageProcessorService {
       let pipeline: Sharp;
 
       if (watermark && transform?.watermark) {
-        const inputBuffer = Buffer.isBuffer(inputStream)
-          ? inputStream
-          : await this.streamToBuffer(inputStream);
+        // A watermark has to be composited against known dimensions, so this is the one path
+        // that cannot stay streaming: the input is read into memory first.
+        const inputBuffer = await this.streamToBuffer(inputStream);
         const metadata = await sharp(inputBuffer, options).metadata();
         const dimensions = this.calculateTransformedDimensions(metadata, transform);
 
@@ -85,7 +87,7 @@ export class ImageProcessorService {
 
       if (signal) {
         if (signal.aborted) {
-          throw new Error('Request aborted');
+          throw new RequestAbortedError();
         }
         signal.addEventListener(
           'abort',
@@ -121,10 +123,11 @@ export class ImageProcessorService {
         throw err;
       }
 
-      const error = err instanceof Error ? err : new Error(String(err));
-      if (error.message === 'The operation was aborted' || error.message === 'Request aborted') {
+      if (isAbortError(err)) {
         throw err;
       }
+
+      const error = err instanceof Error ? err : new Error(String(err));
 
       this.logger.warn({
         msg: 'Sharp pipeline error mapped to BadRequestException',
@@ -231,8 +234,8 @@ export class ImageProcessorService {
     metadata: Metadata,
     transform?: TransformDto,
   ): { width: number; height: number } {
-    let width = metadata.width ?? 0;
-    let height = metadata.height ?? 0;
+    let width = metadata.width;
+    let height = metadata.height;
 
     if (!transform) {
       if (
@@ -574,8 +577,8 @@ export class ImageProcessorService {
 
     // Get scaled watermark dimensions
     const wmMetadata = await sharp(scaledWatermark).metadata();
-    const wmWidth = wmMetadata.width ?? 0;
-    const wmHeight = wmMetadata.height ?? 0;
+    const wmWidth = wmMetadata.width;
+    const wmHeight = wmMetadata.height;
     const spacing = config.spacing ?? 0;
 
     if (wmWidth <= 0 || wmHeight <= 0) {

@@ -12,8 +12,12 @@ services:
     init: true
     stop_grace_period: 30s
     ports:
-      - '${LISTEN_PORT:-8080}:${LISTEN_PORT:-8080}'
+      # The container always listens on 8080: the Dockerfile sets LISTEN_PORT and compose
+      # interpolates from its own directory, not from ../.env. Only the host side varies.
+      - '${LISTEN_PORT:-8080}:8080'
     env_file:
+      # required: false — in an orchestrator the environment comes from the platform and
+      # there is no file to read.
       - path: ../.env
         required: false
     environment:
@@ -28,4 +32,18 @@ services:
       resources:
         limits:
           memory: 1G
+    # Mirrors the HEALTHCHECK in the image, so `docker compose ps` and the orchestrator agree
+    # on what healthy means. Dependency-free, so it survives a change of base image.
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "require('http').get('http://127.0.0.1:8080/api/v1/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
     # Stateless service: image data is streamed and no persistent volume is needed.

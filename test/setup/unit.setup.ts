@@ -28,3 +28,7 @@ afterEach(() => {
 afterAll(() => {
   nock.enableNetConnect();
 });
+
+// The application's own log lines are not what these tests assert on, and pino writes them
+// straight to stdout. Export LOG_LEVEL to see them: `LOG_LEVEL=debug pnpm test`.
+process.env.LOG_LEVEL ??= 'silent';

@@ -33,14 +33,8 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Check
-        run: pnpm check
-
-      - name: Run unit tests
-        run: pnpm test:unit
-
-      - name: Run e2e tests
-        run: pnpm test:e2e
+      - name: Validate
+        run: pnpm validate:all
 
       - name: Read build metadata
         id: metadata

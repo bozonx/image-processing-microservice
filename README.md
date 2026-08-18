@@ -29,12 +29,12 @@ Run the compiled service with `pnpm build && pnpm start`. Run the container with
 
 ## API
 
-| Method | Path | Description |
-| --- | --- | --- |
-| `GET` | `/api/v1/health` | Public health, identity and queue status |
-| `POST` | `/api/v1/process` | Process a multipart image and optional watermark |
+| Method | Path                  | Description                                       |
+| ------ | --------------------- | ------------------------------------------------- |
+| `GET`  | `/api/v1/health`      | Public health, identity and queue status          |
+| `POST` | `/api/v1/process`     | Process a multipart image and optional watermark  |
 | `POST` | `/api/v1/process/raw` | Process an image supplied as the raw request body |
-| `POST` | `/api/v1/exif` | Extract image dimensions and EXIF metadata |
+| `POST` | `/api/v1/exif`        | Extract image dimensions and EXIF metadata        |
 
 ### Endpoints and usage
 
@@ -52,6 +52,7 @@ Run the compiled service with `pnpm build && pnpm start`. Run the container with
 ### Processing options
 
 Parameters JSON supports:
+
 - **`transform`**: `resize` (`width`, `height`, `maxDimension`, `fit`, `withoutEnlargement`, `position`), `crop` (`left`, `top`, `width`, `height`), `rotate` (-360 to 360), `autoOrient`, `flip`, `flop`, `flatten`, `watermark` (`position`, `opacity`, `scale`, `mode`, `spacing`).
 - **`output`**: `format` (`webp`, `avif`, `jpeg`, `png`, `gif`, `tiff`, `raw`), `quality` (1-100), `lossless`, `effort`, `progressive`, `mozjpeg`, `stripMetadata`, etc.
 - **`priority`**: Queue priority (`0` = high, `1` = normal, `2` = low).
@@ -106,11 +107,11 @@ below, and `AUTH_BEARER_TOKENS`.
 
 Three separate limits bound the work a single request can cause. They are not interchangeable:
 
-| Variable | Bounds | Default |
-| --- | --- | --- |
-| `FILE_MAX_BYTES_MB` | The compressed upload, in MiB | `100` |
-| `IMAGE_MAX_INPUT_PIXELS` | Pixels a decoded input may expand to | `25000000` |
-| `IMAGE_MAX_DIMENSION` | Width and height of the returned image; `0` disables | `0` |
+| Variable                 | Bounds                                               | Default    |
+| ------------------------ | ---------------------------------------------------- | ---------- |
+| `FILE_MAX_BYTES_MB`      | The compressed upload, in MiB                        | `100`      |
+| `IMAGE_MAX_INPUT_PIXELS` | Pixels a decoded input may expand to                 | `25000000` |
+| `IMAGE_MAX_DIMENSION`    | Width and height of the returned image; `0` disables | `0`        |
 
 `FILE_MAX_BYTES_MB` says nothing about memory: a 2 MB PNG can decode to tens of gigabytes.
 `IMAGE_MAX_INPUT_PIXELS` is what stops that, and it is a memory budget — roughly 4 bytes per
@@ -133,7 +134,7 @@ clean source tree and runs as the unprivileged `node` user. `APP_VERSION` is inj
 `SERVICE_VERSION` and appears in the health response.
 
 Create `.env` from `.env.example`, then run `pnpm docker:up`. Compose enables init, graceful stop,
-log rotation, a memory limit and a dependency-free health probe. In an orchestrator, supply
+log rotation, a memory limit and a health check mirroring the one in the image. In an orchestrator, supply
 environment variables through its secret/configuration mechanism instead of copying `.env` into
 the image.
 
@@ -147,8 +148,9 @@ Use Node.js from `.nvmrc`, enable Corepack, then run `pnpm install`. Copy `.env.
 and start watch mode with `pnpm dev`. The committed example is the source of truth; do not create
 environment-specific dotenv files.
 
-Before submitting changes, run `pnpm validate:all` (or `pnpm check`, `pnpm test:unit`, and `pnpm test:e2e`).
-Use `pnpm format` and `pnpm lint:fix` for automatic fixes. Image processing is CPU- and memory-intensive,
+Before submitting changes, run `pnpm validate` — or `pnpm validate:all`, which is exactly what CI
+runs. Use `pnpm format` and `pnpm lint:fix` for automatic fixes. `docs/dev.md` covers the layout
+and the test split, `docs/deploy.md` the image and its shutdown behaviour. Image processing is CPU- and memory-intensive,
 so test large inputs and queue saturation when changing Sharp pipelines or limits.
 
 ## License

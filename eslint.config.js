@@ -1,3 +1,5 @@
+// Fleet-wide ESLint configuration. This file is identical in every service; change it in
+// `ivank-microservice-boilerplate` and roll it out, do not fork it per repository.
 import eslint from '@eslint/js';
 import globals from 'globals';
 import jest from 'eslint-plugin-jest';
@@ -5,21 +7,20 @@ import prettierConfig from 'eslint-config-prettier';
 import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
-  // Ignore patterns
   {
-    ignores: ['dist/', 'node_modules/', 'coverage/', '.eslintrc.cjs'],
+    ignores: ['dist/', 'node_modules/', 'coverage/'],
   },
 
-  // Base ESLint recommended rules
   eslint.configs.recommended,
+  ...tseslint.configs.recommendedTypeChecked,
 
-  // TypeScript files configuration
-  ...tseslint.configs.recommended,
   {
     files: ['**/*.ts'],
     languageOptions: {
       parser: tseslint.parser,
       parserOptions: {
+        // projectService picks the nearest tsconfig for every file, so `src/` and `test/`
+        // are both type-aware without a separate lint-only tsconfig to keep in sync.
         projectService: true,
         tsconfigRootDir: import.meta.dirname,
       },
@@ -33,11 +34,9 @@ export default tseslint.config(
       jest,
     },
     rules: {
-      // TypeScript specific rules
+      // The base rule does not understand constructor parameter properties or type-only
+      // signatures, so it must be off for the TypeScript one to work.
       'no-unused-vars': 'off',
-      '@typescript-eslint/explicit-function-return-type': 'off',
-      '@typescript-eslint/explicit-module-boundary-types': 'off',
-      '@typescript-eslint/no-explicit-any': 'warn',
       '@typescript-eslint/no-unused-vars': [
         'error',
         {
@@ -46,6 +45,13 @@ export default tseslint.config(
           caughtErrorsIgnorePattern: '^_',
         },
       ],
+      '@typescript-eslint/explicit-function-return-type': 'off',
+      '@typescript-eslint/explicit-module-boundary-types': 'off',
+      '@typescript-eslint/no-explicit-any': 'error',
+      '@typescript-eslint/no-non-null-assertion': 'error',
+
+      // Type-aware rules. These are what catch the mistakes a reviewer misses.
+      '@typescript-eslint/no-deprecated': 'error',
       '@typescript-eslint/prefer-nullish-coalescing': 'error',
       '@typescript-eslint/prefer-optional-chain': 'error',
       '@typescript-eslint/no-floating-promises': 'error',
@@ -53,8 +59,8 @@ export default tseslint.config(
       '@typescript-eslint/no-misused-promises': 'error',
       '@typescript-eslint/require-await': 'error',
       '@typescript-eslint/no-unnecessary-type-assertion': 'error',
+      '@typescript-eslint/no-unnecessary-condition': 'error',
       '@typescript-eslint/prefer-as-const': 'error',
-      '@typescript-eslint/no-non-null-assertion': 'warn',
       '@typescript-eslint/consistent-type-imports': [
         'error',
         { prefer: 'type-imports', fixStyle: 'inline-type-imports' },
@@ -62,7 +68,7 @@ export default tseslint.config(
       '@typescript-eslint/consistent-type-exports': 'error',
       '@typescript-eslint/no-import-type-side-effects': 'error',
 
-      // NestJS specific rules
+      // NestJS: accessibility is part of the public contract of a provider.
       '@typescript-eslint/explicit-member-accessibility': [
         'error',
         {
@@ -77,24 +83,22 @@ export default tseslint.config(
         },
       ],
 
-      // General rules
-      'no-console': 'warn',
+      'no-console': 'error',
       'no-debugger': 'error',
       'prefer-const': 'error',
       'no-var': 'error',
+      eqeqeq: ['error', 'smart'],
     },
   },
 
-  // Test files override
   {
-    files: ['**/*.spec.ts', '**/*.test.ts', 'test/**/*.ts'],
+    files: ['test/**/*.ts'],
     languageOptions: {
       globals: {
         ...globals.jest,
       },
     },
     rules: {
-      // Jest specific rules
       'jest/no-disabled-tests': 'warn',
       'jest/no-focused-tests': 'error',
       'jest/no-identical-title': 'error',
@@ -104,17 +108,15 @@ export default tseslint.config(
       'jest/no-done-callback': 'error',
       'jest/valid-describe-callback': 'error',
 
-      '@typescript-eslint/no-unsafe-assignment': 'off',
-      '@typescript-eslint/no-unsafe-member-access': 'off',
-      '@typescript-eslint/no-unsafe-call': 'off',
-      '@typescript-eslint/no-unsafe-argument': 'off',
-      '@typescript-eslint/no-unsafe-return': 'off',
+      // Tests reach into internals and build partial doubles on purpose.
       '@typescript-eslint/no-explicit-any': 'off',
+      '@typescript-eslint/no-non-null-assertion': 'off',
+      '@typescript-eslint/no-unnecessary-condition': 'off',
       '@typescript-eslint/explicit-member-accessibility': 'off',
       'no-console': 'off',
     },
   },
 
-  // Prettier config (must be last to override other configs)
+  // Must stay last: switches off every rule Prettier owns.
   prettierConfig,
 );

@@ -11,6 +11,15 @@ import {
 import { ConfigService } from '@nestjs/config';
 import PQueue, { TimeoutError } from 'p-queue';
 import type { ImageConfig } from '../../../config/image.config.js';
+import { isAbortError, RequestAbortedError } from '../client-connection.js';
+
+/** Queue depth, as reported by the health endpoint. */
+export interface QueueStatus {
+  /** Tasks waiting for a concurrency slot. */
+  size: number;
+  /** Tasks currently running. */
+  pending: number;
+}
 
 /**
  * Service for managing a priority queue of heavy tasks.
@@ -62,7 +71,7 @@ export class QueueService implements OnModuleDestroy {
     }
 
     if (signal?.aborted) {
-      throw new Error('Request aborted');
+      throw new RequestAbortedError();
     }
 
     if (this.maxQueueSize > 0 && this.queue.size + this.queue.pending >= this.maxQueueSize) {
@@ -74,7 +83,7 @@ export class QueueService implements OnModuleDestroy {
     const internalAbortController = new AbortController();
 
     const onExternalAbort = () => {
-      internalAbortController.abort(signal?.reason ?? new Error('Request aborted'));
+      internalAbortController.abort(signal?.reason ?? new RequestAbortedError());
     };
 
     if (signal) {
@@ -116,8 +125,8 @@ export class QueueService implements OnModuleDestroy {
         internalAbortController.abort(error);
       }
 
-      // Don't log abort errors as failures
-      if (errorMessage !== 'The operation was aborted' && errorMessage !== 'Request aborted') {
+      // A caller that hung up is not a failure of this service.
+      if (!isAbortError(error)) {
         this.logger.error({
           msg: 'Task failed',
           duration,
@@ -135,12 +144,11 @@ export class QueueService implements OnModuleDestroy {
       }
 
       // Map p-queue TimeoutError to 504 GatewayTimeoutException
-      if (error instanceof TimeoutError || (error as Error)?.name === 'TimeoutError') {
+      if (
+        error instanceof TimeoutError ||
+        (error instanceof Error && error.name === 'TimeoutError')
+      ) {
         throw new GatewayTimeoutException('Task execution timed out');
-      }
-
-      if (error instanceof HttpException) {
-        throw error;
       }
 
       throw error;
@@ -155,9 +163,11 @@ export class QueueService implements OnModuleDestroy {
   }
 
   /**
-   * Returns current queue metrics (size and number of active tasks).
+   * Returns current queue depth.
+   *
+   * @returns Waiting and running task counts.
    */
-  public getStatus() {
+  public getStatus(): QueueStatus {
     return {
       size: this.queue.size,
       pending: this.queue.pending,
@@ -165,9 +175,12 @@ export class QueueService implements OnModuleDestroy {
   }
 
   /**
-   * Lifecycle hook to ensure all remaining tasks complete during application shutdown.
+   * Lets the queue finish its in-flight work while the app is closing.
+   *
+   * New tasks are rejected from the moment this runs; `main.ts` caps how long the wait may
+   * take, so a task that never settles cannot hold the process open indefinitely.
    */
-  public async onModuleDestroy() {
+  public async onModuleDestroy(): Promise<void> {
     this.logger.log('Starting graceful shutdown...');
     this.isShuttingDown = true;
 

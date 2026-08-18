@@ -1,15 +1,7 @@
 import { registerAs } from '@nestjs/config';
-import {
-  IsInt,
-  IsString,
-  IsBoolean,
-  Min,
-  Max,
-  IsEnum,
-  validateSync,
-  ValidateNested,
-} from 'class-validator';
-import { plainToClass, Type } from 'class-transformer';
+import { IsInt, IsString, IsBoolean, Min, Max, IsEnum, ValidateNested } from 'class-validator';
+import { Type } from 'class-transformer';
+import { validateConfig } from './validate-config.js';
 
 /**
  * Absolute ceiling on any image dimension, in pixels.
@@ -125,40 +117,33 @@ export class ImageConfig {
   public pngCompressionLevel!: number;
 }
 
-export default registerAs('image', (): ImageConfig => {
-  const config = plainToClass(ImageConfig, {
-    maxBytes: parseInt(process.env.FILE_MAX_BYTES_MB ?? '100', 10) * 1024 * 1024,
-    maxInputPixels: parseInt(process.env.IMAGE_MAX_INPUT_PIXELS ?? '25000000', 10),
-    maxDimension: parseInt(process.env.IMAGE_MAX_DIMENSION ?? '0', 10),
-    queue: {
-      maxConcurrency: parseInt(process.env.MAX_CONCURRENCY ?? '4', 10),
-      maxQueueSize: parseInt(process.env.QUEUE_MAX_SIZE ?? '100', 10),
-      timeout: parseInt(process.env.QUEUE_TIMEOUT_SECONDS ?? '60', 10) * 1000,
-      requestTimeout: parseInt(process.env.REQUEST_TIMEOUT_SECONDS ?? '120', 10) * 1000,
+export default registerAs('image', (): ImageConfig =>
+  validateConfig(
+    ImageConfig,
+    {
+      maxBytes: parseInt(process.env.FILE_MAX_BYTES_MB ?? '100', 10) * 1024 * 1024,
+      maxInputPixels: parseInt(process.env.IMAGE_MAX_INPUT_PIXELS ?? '25000000', 10),
+      maxDimension: parseInt(process.env.IMAGE_MAX_DIMENSION ?? '0', 10),
+      queue: {
+        maxConcurrency: parseInt(process.env.MAX_CONCURRENCY ?? '4', 10),
+        maxQueueSize: parseInt(process.env.QUEUE_MAX_SIZE ?? '100', 10),
+        timeout: parseInt(process.env.QUEUE_TIMEOUT_SECONDS ?? '60', 10) * 1000,
+        requestTimeout: parseInt(process.env.REQUEST_TIMEOUT_SECONDS ?? '120', 10) * 1000,
+      },
+      defaults: {
+        format: process.env.IMAGE_DEFAULT_FORMAT ?? DefaultImageFormat.WEBP,
+        quality: 80,
+        effort: 4,
+        lossless: false,
+        stripMetadata: false,
+        autoOrient: true,
+      },
+      avifChromaSubsampling: '4:2:0',
+      jpegProgressive: false,
+      jpegMozjpeg: false,
+      jpegChromaSubsampling: '4:2:0',
+      pngCompressionLevel: 6,
     },
-    defaults: {
-      format: process.env.IMAGE_DEFAULT_FORMAT ?? DefaultImageFormat.WEBP,
-      quality: 80,
-      effort: 4,
-      lossless: false,
-      stripMetadata: false,
-      autoOrient: true,
-    },
-    avifChromaSubsampling: '4:2:0',
-    jpegProgressive: false,
-    jpegMozjpeg: false,
-    jpegChromaSubsampling: '4:2:0',
-    pngCompressionLevel: 6,
-  });
-
-  const errors = validateSync(config, {
-    skipMissingProperties: false,
-  });
-
-  if (errors.length > 0) {
-    const errorMessages = errors.map(err => Object.values(err.constraints ?? {}).join(', '));
-    throw new Error(`Image config validation error: ${errorMessages.join('; ')}`);
-  }
-
-  return config;
-});
+    'Image',
+  ),
+);

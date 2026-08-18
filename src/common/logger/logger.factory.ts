@@ -1,14 +1,23 @@
 import type { ConfigService } from '@nestjs/config';
 import type { Params } from 'nestjs-pino';
 import type { AppConfig } from '../../config/app.config.js';
-import { SERVICE_NAME } from '../../config/service-info.js';
+import { SERVICE_NAME, SERVICE_VERSION } from '../../config/service-info.js';
+import { buildApiPrefix } from '../http/api-prefix.js';
 
+/**
+ * Builds the nestjs-pino configuration for the running environment.
+ *
+ * Kept out of `app.module.ts` so the module file stays a wiring declaration: this factory is
+ * where the fleet-wide logging contract lives — JSON in production, `pino-pretty` in
+ * development, ISO-8601 under `@timestamp`, and `service`/`version`/`environment` on every line.
+ *
+ * @param configService - Config service holding the validated `app` namespace.
+ * @returns Parameters for `LoggerModule.forRootAsync`.
+ */
 export const getLoggerConfig = (configService: ConfigService): Params => {
-  const appConfig = configService.get<AppConfig>('app');
-  if (!appConfig) {
-    throw new Error('App config not found');
-  }
+  const appConfig = configService.getOrThrow<AppConfig>('app');
   const isDev = appConfig.nodeEnv === 'development';
+  const healthPath = `/${buildApiPrefix(appConfig.basePath)}/health`;
 
   return {
     pinoHttp: {
@@ -16,6 +25,7 @@ export const getLoggerConfig = (configService: ConfigService): Params => {
       timestamp: () => `,"@timestamp":"${new Date().toISOString()}"`,
       base: {
         service: SERVICE_NAME,
+        version: SERVICE_VERSION,
         environment: appConfig.nodeEnv,
       },
       transport: isDev
@@ -55,7 +65,7 @@ export const getLoggerConfig = (configService: ConfigService): Params => {
         client: (req as unknown as { authClient?: string }).authClient,
       }),
       redact: {
-        paths: ['req.headers.authorization', 'req.headers["x-api-key"]'],
+        paths: ['req.headers.authorization', 'req.headers["x-api-key"]', 'req.headers.cookie'],
         censor: '[REDACTED]',
       },
       customLogLevel: (req, res, err) => {
@@ -68,12 +78,10 @@ export const getLoggerConfig = (configService: ConfigService): Params => {
         return 'info';
       },
       autoLogging: {
-        ignore: req => {
-          if (appConfig.nodeEnv === 'production') {
-            return req.url?.includes('/health') ?? false;
-          }
-          return false;
-        },
+        // Health is polled every few seconds; logging it in production is pure noise.
+        // Matched on the exact path — a substring test would also silence unrelated routes.
+        ignore: req =>
+          appConfig.nodeEnv === 'production' && (req.url?.split('?')[0] ?? '') === healthPath,
       },
     },
   };

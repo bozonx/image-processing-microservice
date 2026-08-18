@@ -10,8 +10,10 @@ import { PinoLogger } from 'nestjs-pino';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 
 /**
- * Global exception filter that catches all exceptions
- * and formats them in a consistent way for Fastify responses
+ * Catches everything that reaches the framework and renders one response shape.
+ *
+ * Without it, a Nest `HttpException`, a Fastify plugin error and an unexpected `Error` each
+ * reach the caller in a different format, and consumers end up parsing three of them.
  */
 @Catch()
 export class AllExceptionsFilter implements ExceptionFilter {
@@ -24,18 +26,10 @@ export class AllExceptionsFilter implements ExceptionFilter {
     const response = ctx.getResponse<FastifyReply>();
     const request = ctx.getRequest<FastifyRequest>();
 
-    // Preserve statusCode from non-HttpException errors (e.g., Fastify plugins)
-    const status =
-      exception instanceof HttpException
-        ? exception.getStatus()
-        : typeof (exception as { statusCode?: unknown })?.statusCode === 'number'
-          ? (exception as { statusCode: number }).statusCode
-          : HttpStatus.INTERNAL_SERVER_ERROR;
-
+    const status = this.resolveStatus(exception);
     const message = this.extractMessage(exception);
     const errorResponse = this.buildErrorResponse(exception);
 
-    // Log error for internal tracking
     if (status >= 500) {
       this.logger.error(
         `${request.method} ${request.url} - ${status} - ${message}`,
@@ -45,8 +39,9 @@ export class AllExceptionsFilter implements ExceptionFilter {
       this.logger.warn(`${request.method} ${request.url} - ${status} - ${message}`);
     }
 
-    // If headers were already sent or response started, we cannot send a new JSON response.
-    // This often happens during streaming timeouts.
+    // Once the response has started there is no way to replace it with JSON. Destroying the
+    // socket is what tells the client the body it received is incomplete; sending anything
+    // else would append garbage to a half-written payload.
     if (response.raw.headersSent || response.sent) {
       this.logger.warn('Headers already sent, cannot send error response to client');
       if (!response.raw.destroyed) {
@@ -65,13 +60,43 @@ export class AllExceptionsFilter implements ExceptionFilter {
     });
   }
 
+  /**
+   * Resolves the status code to answer with.
+   *
+   * Errors raised by Fastify plugins are plain objects carrying `statusCode`, not
+   * `HttpException`s, so that field is honoured before falling back to 500.
+   *
+   * @param exception - The caught value.
+   * @returns The HTTP status to send.
+   */
+  private resolveStatus(exception: unknown): number {
+    if (exception instanceof HttpException) {
+      return exception.getStatus();
+    }
+
+    if (typeof exception === 'object' && exception !== null && 'statusCode' in exception) {
+      const { statusCode } = exception;
+      if (typeof statusCode === 'number') {
+        return statusCode;
+      }
+    }
+
+    return HttpStatus.INTERNAL_SERVER_ERROR;
+  }
+
+  /**
+   * Extracts a single human-readable message from anything that was thrown.
+   *
+   * @param exception - The caught value.
+   * @returns The message to report.
+   */
   private extractMessage(exception: unknown): string {
     if (exception instanceof HttpException) {
       const response = exception.getResponse();
       if (typeof response === 'string') {
         return response;
       }
-      if (typeof response === 'object' && response !== null && 'message' in response) {
+      if (typeof response === 'object' && 'message' in response) {
         const msg = response.message;
         if (Array.isArray(msg)) {
           return msg.join(', ');
@@ -90,13 +115,16 @@ export class AllExceptionsFilter implements ExceptionFilter {
     return 'Internal server error';
   }
 
+  /**
+   * Builds the `error` field: the framework's own payload when there is one, its name otherwise.
+   *
+   * @param exception - The caught value.
+   * @returns Value for the `error` field.
+   */
   private buildErrorResponse(exception: unknown): string | object | undefined {
     if (exception instanceof HttpException) {
       const response = exception.getResponse();
-      if (typeof response === 'object' && response !== null) {
-        return response;
-      }
-      return exception.name;
+      return typeof response === 'object' ? response : exception.name;
     }
 
     if (exception instanceof Error) {

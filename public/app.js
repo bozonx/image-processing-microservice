@@ -2,7 +2,6 @@
 // Navigate from /ui (or /ui/index.html) to /api/v1 relative to the current path
 const API_BASE = window.location.pathname.replace(/\/ui(?:\/index\.html|\/)?$/, '') + '/api/v1';
 
-
 // State
 let currentFile = null;
 let currentMimeType = null;
@@ -94,13 +93,13 @@ function initializeProcessTab() {
   uploadArea.addEventListener('click', () => fileInput.click());
 
   // File input change
-  fileInput.addEventListener('change', (e) => {
+  fileInput.addEventListener('change', e => {
     const file = e.target.files[0];
     if (file) handleFileUpload(file);
   });
 
   // Drag and drop
-  uploadArea.addEventListener('dragover', (e) => {
+  uploadArea.addEventListener('dragover', e => {
     e.preventDefault();
     uploadArea.classList.add('drag-over');
   });
@@ -109,7 +108,7 @@ function initializeProcessTab() {
     uploadArea.classList.remove('drag-over');
   });
 
-  uploadArea.addEventListener('drop', (e) => {
+  uploadArea.addEventListener('drop', e => {
     e.preventDefault();
     uploadArea.classList.remove('drag-over');
     const file = e.dataTransfer.files[0];
@@ -198,7 +197,7 @@ async function processImage() {
   const params = {
     priority,
     transform: buildTransformObject(),
-    output: buildOutputObject()
+    output: buildOutputObject(),
   };
   formData.append('params', JSON.stringify(params));
 
@@ -207,7 +206,7 @@ async function processImage() {
   try {
     const response = await fetch(`${API_BASE}/process`, {
       method: 'POST',
-      body: formData
+      body: formData,
     });
 
     if (!response.ok) {
@@ -262,7 +261,7 @@ function buildTransformObject() {
   if (cropWidth && cropHeight) {
     transform.crop = {
       width: cropWidth,
-      height: cropHeight
+      height: cropHeight,
     };
     if (cropLeft) transform.crop.left = cropLeft;
     if (cropTop) transform.crop.top = cropTop;
@@ -326,7 +325,8 @@ function buildOutputObject() {
   if (effort !== undefined && !isNaN(effort)) output.effort = effort;
 
   const compressionLevel = parseInt(document.getElementById('compressionLevel').value);
-  if (compressionLevel !== undefined && !isNaN(compressionLevel)) output.compressionLevel = compressionLevel;
+  if (compressionLevel !== undefined && !isNaN(compressionLevel))
+    output.compressionLevel = compressionLevel;
 
   const chromaSubsampling = document.getElementById('chromaSubsampling').value;
   if (chromaSubsampling) output.chromaSubsampling = chromaSubsampling;
@@ -367,33 +367,37 @@ function displayProcessResult(blob, mimeType) {
     const stats = [
       {
         label: 'Format',
-        value: mimeType.replace('image/', '').toUpperCase()
+        value: mimeType.replace('image/', '').toUpperCase(),
       },
       {
         label: 'Dimensions',
-        value: `${img.width} × ${img.height}px`
+        value: `${img.width} × ${img.height}px`,
       },
       {
         label: 'File Size',
-        value: formatBytes(blob.size)
+        value: formatBytes(blob.size),
       },
       {
         label: 'Original Size',
-        value: formatBytes(currentFile.size)
+        value: formatBytes(currentFile.size),
       },
       {
         label: 'Size Reduction',
         value: `${((1 - blob.size / currentFile.size) * 100).toFixed(1)}%`,
-        success: blob.size < currentFile.size
-      }
+        success: blob.size < currentFile.size,
+      },
     ];
 
-    statsGrid.innerHTML = stats.map(stat => `
+    statsGrid.innerHTML = stats
+      .map(
+        stat => `
           <div class="stat-card">
               <div class="stat-label">${stat.label}</div>
               <div class="stat-value ${stat.success ? 'success' : ''}">${stat.value}</div>
           </div>
-      `).join('');
+      `,
+      )
+      .join('');
   };
   img.src = url;
 
@@ -439,19 +443,19 @@ function initializeWatermark() {
   watermarkUploadArea.addEventListener('click', () => watermarkInput.click());
 
   // File input change
-  watermarkInput.addEventListener('change', (e) => {
+  watermarkInput.addEventListener('change', e => {
     const file = e.target.files[0];
     if (file) handleWatermarkUpload(file);
   });
 
   // Clear button
-  clearWatermarkBtn.addEventListener('click', (e) => {
+  clearWatermarkBtn.addEventListener('click', e => {
     e.stopPropagation();
     clearWatermark();
   });
 
   // Mode change - toggle position and spacing fields
-  watermarkMode.addEventListener('change', (e) => {
+  watermarkMode.addEventListener('change', e => {
     const mode = e.target.value;
     const positionField = document.getElementById('watermarkPositionField');
     const spacingField = document.getElementById('watermarkSpacingField');
@@ -533,13 +537,13 @@ function initializeExifTab() {
   uploadArea.addEventListener('click', () => fileInput.click());
 
   // File input change
-  fileInput.addEventListener('change', (e) => {
+  fileInput.addEventListener('change', e => {
     const file = e.target.files[0];
     if (file) handleExifFileUpload(file);
   });
 
   // Drag and drop
-  uploadArea.addEventListener('dragover', (e) => {
+  uploadArea.addEventListener('dragover', e => {
     e.preventDefault();
     uploadArea.classList.add('drag-over');
   });
@@ -548,7 +552,7 @@ function initializeExifTab() {
     uploadArea.classList.remove('drag-over');
   });
 
-  uploadArea.addEventListener('drop', (e) => {
+  uploadArea.addEventListener('drop', e => {
     e.preventDefault();
     uploadArea.classList.remove('drag-over');
     const file = e.dataTransfer.files[0];
@@ -620,7 +624,7 @@ async function extractExif() {
   try {
     const response = await fetch(`${API_BASE}/exif`, {
       method: 'POST',
-      body: formData
+      body: formData,
     });
 
     if (!response.ok) {

@@ -1,3 +1,4 @@
+import { describe, it, expect, beforeEach } from '@jest/globals';
 import { Test, type TestingModule } from '@nestjs/testing';
 import { ExifService } from '../../src/modules/image-processing/services/exif.service.js';
 import sharp from 'sharp';

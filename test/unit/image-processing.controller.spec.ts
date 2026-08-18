@@ -1,4 +1,4 @@
-import { jest } from '@jest/globals';
+import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 import { Test, type TestingModule } from '@nestjs/testing';
 import {
   BadRequestException,
@@ -11,6 +11,20 @@ import { ImageProcessorService } from '../../src/modules/image-processing/servic
 import { ExifService } from '../../src/modules/image-processing/services/exif.service.js';
 import { QueueService } from '../../src/modules/image-processing/services/queue.service.js';
 import { ConfigService } from '@nestjs/config';
+
+/** Config the controller reads at construction time. */
+const IMAGE_CONFIG: Record<string, unknown> = { image: { maxBytes: 10 * 1024 * 1024 } };
+
+/**
+ * Builds a raw request whose body has fully arrived.
+ *
+ * `complete` is what the controller tests for a hang-up, so a double that omits it looks like
+ * a caller that vanished mid-upload.
+ */
+const rawReq = (contentType: string, chunks: Buffer[]) => ({
+  headers: { 'content-type': contentType },
+  raw: Object.assign(Readable.from(chunks), { complete: true }),
+});
 
 describe('ImageProcessingController', () => {
   let controller: ImageProcessingController;
@@ -47,11 +61,13 @@ describe('ImageProcessingController', () => {
         {
           provide: ConfigService,
           useValue: {
-            get: jest.fn().mockImplementation((key: unknown) => {
-              if (key === 'image') {
-                return { maxBytes: 10 * 1024 * 1024 };
+            get: jest.fn().mockImplementation((key: unknown) => IMAGE_CONFIG[key as string]),
+            getOrThrow: jest.fn().mockImplementation((key: unknown) => {
+              const value = IMAGE_CONFIG[key as string];
+              if (value === undefined) {
+                throw new Error(`Configuration key "${String(key)}" not found`);
               }
-              return undefined;
+              return value;
             }),
           },
         },
@@ -69,7 +85,7 @@ describe('ImageProcessingController', () => {
     headers: Record<string, string> = { 'content-type': 'multipart/form-data' },
   ) => ({
     headers,
-    raw: Readable.from([]),
+    raw: Object.assign(Readable.from([]), { complete: true }),
     file: jest.fn().mockImplementation(async () => {
       await Promise.resolve();
       return partsData.find(p => p.type === 'file') ?? partsData[0];
@@ -104,10 +120,7 @@ describe('ImageProcessingController', () => {
 
   describe('processRaw', () => {
     it('should accept application/octet-stream', async () => {
-      const req = {
-        headers: { 'content-type': 'application/octet-stream' },
-        raw: Readable.from([Buffer.from('test-data')]),
-      };
+      const req = rawReq('application/octet-stream', [Buffer.from('test-data')]);
       const res = mockRes();
 
       const buffer = Buffer.from('processed');
@@ -138,20 +151,14 @@ describe('ImageProcessingController', () => {
     });
 
     it('should reject unsupported content type', async () => {
-      const req = {
-        headers: { 'content-type': 'text/plain' },
-        raw: Readable.from([Buffer.from('x')]),
-      };
-      await expect(controller.processRaw(req as any, {} as any)).rejects.toThrow(
+      const req = rawReq('text/plain', [Buffer.from('x')]);
+      await expect(controller.processRaw(req as any, mockRes() as any)).rejects.toThrow(
         UnsupportedMediaTypeException,
       );
     });
 
     it('should propagate original error when processStream fails (not mask as abort)', async () => {
-      const req = {
-        headers: { 'content-type': 'image/jpeg' },
-        raw: Readable.from([Buffer.from('corrupt-image-data')]),
-      };
+      const req = rawReq('image/jpeg', [Buffer.from('corrupt-image-data')]);
       const res = mockRes();
 
       const originalError = new Error('Input buffer contains unsupported image format');
@@ -163,10 +170,7 @@ describe('ImageProcessingController', () => {
     });
 
     it('should silently handle abort when client disconnects', async () => {
-      const req = {
-        headers: { 'content-type': 'image/jpeg' },
-        raw: Readable.from([Buffer.from('test-data')]),
-      };
+      const req = rawReq('image/jpeg', [Buffer.from('test-data')]);
       const res = mockRes();
 
       // Simulate p-queue behavior: reject with abort error when signal aborts
@@ -222,10 +226,7 @@ describe('ImageProcessingController', () => {
     });
 
     it('should throw 413 when payload exceeds limit', async () => {
-      const req = {
-        headers: { 'content-type': 'image/jpeg' },
-        raw: Readable.from([Buffer.alloc(11 * 1024 * 1024)]),
-      };
+      const req = rawReq('image/jpeg', [Buffer.alloc(11 * 1024 * 1024)]);
       const res = mockRes();
 
       jest.spyOn(imageProcessor, 'processStream').mockImplementation(async (input: Readable) => {
@@ -345,7 +346,9 @@ describe('ImageProcessingController', () => {
 
     it('should throw BadRequestException if no file', async () => {
       const req = mockReq([]);
-      await expect(controller.process(req as any, {} as any)).rejects.toThrow(BadRequestException);
+      await expect(controller.process(req as any, mockRes() as any)).rejects.toThrow(
+        BadRequestException,
+      );
     });
 
     it('should throw BadRequestException if watermark config provided but no file', async () => {
@@ -366,7 +369,7 @@ describe('ImageProcessingController', () => {
       };
 
       const req = mockReq([filePart, paramsPart]);
-      await expect(controller.process(req as any, {} as any)).rejects.toThrow(
+      await expect(controller.process(req as any, mockRes() as any)).rejects.toThrow(
         'Watermark file is required when watermark config is provided',
       );
     });
@@ -385,7 +388,9 @@ describe('ImageProcessingController', () => {
       };
 
       const req = mockReq([filePart, paramsPart]);
-      await expect(controller.process(req as any, {} as any)).rejects.toThrow('Invalid params');
+      await expect(controller.process(req as any, mockRes() as any)).rejects.toThrow(
+        'Invalid params',
+      );
     });
 
     it('should throw BadRequestException for non-whitelisted properties in params', async () => {
@@ -406,7 +411,7 @@ describe('ImageProcessingController', () => {
       };
 
       const req = mockReq([filePart, paramsPart]);
-      await expect(controller.process(req as any, {} as any)).rejects.toThrow(
+      await expect(controller.process(req as any, mockRes() as any)).rejects.toThrow(
         'property reisze should not exist',
       );
     });
@@ -430,7 +435,7 @@ describe('ImageProcessingController', () => {
   });
 
   describe('extractExif', () => {
-    it('should call exifService.extract and return result', async () => {
+    it('sends the extracted metadata', async () => {
       const filePart = {
         type: 'file',
         fieldname: 'file',
@@ -443,11 +448,17 @@ describe('ImageProcessingController', () => {
       jest.spyOn(exifService, 'extract').mockResolvedValue(exifData);
 
       const res = mockRes();
-      const result = await controller.extractExif(req as any, res as any);
+      await controller.extractExif(req as any, res as any);
 
       expect(queueService.add).toHaveBeenCalled();
       expect(exifService.extract).toHaveBeenCalledWith(Buffer.from('test-data'), filePart.mimetype);
-      expect(result).toEqual({ exif: exifData, width: undefined, height: undefined });
+      // The endpoint writes through the reply; a returned value would be ignored by Nest,
+      // because the handler takes @Res().
+      expect(res.send).toHaveBeenCalledWith({
+        exif: exifData,
+        width: undefined,
+        height: undefined,
+      });
     });
 
     it('should throw PayloadTooLargeException when exif multipart upload exceeds limit', async () => {

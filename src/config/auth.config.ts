@@ -1,8 +1,9 @@
 import { registerAs } from '@nestjs/config';
-import { plainToClass } from 'class-transformer';
-import { IsBoolean, IsString, validateSync } from 'class-validator';
+import { IsBoolean, IsString } from 'class-validator';
 import { parseBearerTokens, type BearerToken } from '../common/auth/auth.hook.js';
+import { validateConfig } from './validate-config.js';
 
+/** Credentials the service accepts. Empty everywhere means the service is public. */
 export class AuthConfig {
   /** Basic auth user. Empty when Basic auth is not configured. */
   @IsString()
@@ -25,22 +26,17 @@ export default registerAs('auth', (): AuthConfig => {
   const basicPass = (process.env.AUTH_BASIC_PASS ?? '').trim();
   const bearerTokens = parseBearerTokens(process.env.AUTH_BEARER_TOKENS);
 
-  const config = plainToClass(AuthConfig, {
-    basicUser,
-    basicPass,
-    bearerTokens,
-    // Basic auth needs both halves; a half-configured pair is a mistake, not a setup.
-    enabled: (basicUser !== '' && basicPass !== '') || bearerTokens.length > 0,
-  });
-
-  const errors = validateSync(config, {
-    skipMissingProperties: false,
-  });
-
-  if (errors.length > 0) {
-    const errorMessages = errors.map(err => Object.values(err.constraints ?? {}).join(', '));
-    throw new Error(`Auth config validation error: ${errorMessages.join('; ')}`);
-  }
+  const config = validateConfig(
+    AuthConfig,
+    {
+      basicUser,
+      basicPass,
+      bearerTokens,
+      // Basic auth needs both halves; a half-configured pair is a mistake, not a setup.
+      enabled: (basicUser !== '' && basicPass !== '') || bearerTokens.length > 0,
+    },
+    'Auth',
+  );
 
   if ((basicUser === '') !== (basicPass === '')) {
     throw new Error(

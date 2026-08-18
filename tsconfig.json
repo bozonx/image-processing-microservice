@@ -2,16 +2,16 @@
   "compilerOptions": {
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
+    "target": "ES2022",
+    "outDir": "./dist",
     "declaration": false,
     "removeComments": true,
+    "sourceMap": true,
+    "incremental": true,
     "emitDecoratorMetadata": true,
     "experimentalDecorators": true,
     "allowSyntheticDefaultImports": true,
     "esModuleInterop": true,
-    "target": "ES2022",
-    "sourceMap": true,
-    "outDir": "./dist",
-    "incremental": true,
     "skipLibCheck": true,
     "strict": true,
     "noImplicitOverride": true,
@@ -20,12 +20,6 @@
     "noFallthroughCasesInSwitch": true,
     "noUncheckedIndexedAccess": true
   },
-  "include": [
-    "src/**/*"
-  ],
-  "exclude": [
-    "node_modules",
-    "dist",
-    "coverage"
-  ]
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist", "coverage"]
 }

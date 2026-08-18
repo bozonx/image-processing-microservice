@@ -39,6 +39,10 @@
       "matchPackageNames": ["fastify", "@fastify/**"]
     },
     {
+      "groupName": "hono",
+      "matchPackageNames": ["hono", "@hono/**"]
+    },
+    {
       "groupName": "eslint",
       "matchPackageNames": [
         "eslint",
@@ -53,8 +57,12 @@
       "matchPackageNames": ["jest", "@jest/**", "ts-jest", "@types/jest"]
     },
     {
+      "groupName": "vitest",
+      "matchPackageNames": ["vitest", "@vitest/**"]
+    },
+    {
       "groupName": "types",
-      "matchPackageNames": ["@types/**"]
+      "matchPackageNames": ["@types/**", "@cloudflare/workers-types"]
     },
     {
       "description": "Keep the fleet package manager current",

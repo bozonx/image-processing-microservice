@@ -1,3 +1,4 @@
+import { describe, it, expect, beforeEach, afterEach } from '@jest/globals';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { createTestApp } from './test-app.factory.js';
 import { withEnvVars } from './env-helper.js';

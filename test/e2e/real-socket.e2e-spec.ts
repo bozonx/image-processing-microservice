@@ -35,7 +35,8 @@ describe('Real socket (e2e)', () => {
 
   const imageForm = (): FormData => {
     const form = new FormData();
-    form.append('file', new Blob([image], { type: 'image/png' }), 'test.png');
+    // Blob wants an ArrayBuffer-backed view; a Node Buffer may sit on a SharedArrayBuffer.
+    form.append('file', new Blob([new Uint8Array(image)], { type: 'image/png' }), 'test.png');
     return form;
   };
 

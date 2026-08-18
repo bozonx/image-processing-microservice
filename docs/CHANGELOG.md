@@ -2,6 +2,64 @@
 
 ## Unreleased
 
+### Changed
+
+- **Breaking (scripts).** `check` is static analysis only (`typecheck && lint && format:check`),
+  `validate` adds unit tests, and `validate:all` adds a coverage run of both projects and a
+  build. CI now runs `pnpm validate:all` as a single step, so there is nothing CI does that a
+  developer has no command for. The split is now the fleet standard, not a local deviation.
+- `typecheck` runs over `tsconfig.spec.json`, so `test/` is type-checked. It never was, and it
+  was hiding two real type errors in the suite — a `Buffer` passed where a `BlobPart` was
+  expected, and an assertion on a mock that takes no arguments.
+- `lint` fails on warnings, and `format:check` covers the whole repository rather than
+  `{src,test}/**/*.ts`. Thirteen accumulated lint warnings and several unformatted files had
+  been invisible to CI.
+- **`ImageProcessingController` rewritten around three helpers.** The client-disconnect dance
+  (`AbortController`, the `complete`/`destroyed` test, listener teardown) was written out three
+  times, the header-parameter parser twice, the multipart loop twice and the response-header
+  block twice. They are now `runQueued`, `collectMultipart`, `parseParams` and `sendImage`, and
+  the file is a third shorter. Behaviour is unchanged except that a reply `error` event now
+  counts as a disconnect on every endpoint, not only on `process/raw`.
+- Aborts travel as a typed `RequestAbortedError` instead of being recognised by comparing error
+  message strings at six different call sites.
+- Shutdown always ends in an explicit exit status: `0` after a clean close, `1` when the close
+  throws, and `1` after the new `SHUTDOWN_FORCE_EXIT_SECONDS` when it never returns. A queue
+  task that never settles used to leave the process hanging until the orchestrator's SIGKILL,
+  which is reported as a clean stop. The adapter also sets `forceCloseConnections: true`.
+- The body limit has one source of truth. `createFastifyAdapter` re-read `FILE_MAX_BYTES_MB`
+  from the environment with its own default, so the adapter and `image.config.ts` could disagree
+  about how large a body may be.
+- The health response is typed again (`HealthResponse`), and its extra `queue` field is now
+  recorded as an allowed deviation in the fleet standard rather than being undocumented.
+- Configuration is built through the shared `validateConfig()` helper and reports the failing
+  property path. `plainToClass` was replaced with `plainToInstance` — the former is deprecated.
+- ESLint gained `no-deprecated`, `no-unnecessary-condition` and `eqeqeq`, which found five dead
+  conditions across the pipeline and the queue.
+- Jest runs with `injectGlobals: false` and a coverage threshold; tests import from
+  `@jest/globals`, which is what gives matchers their types. Application logs are silenced
+  during tests.
+- The log line for health requests is skipped on an exact path match. `url.includes('/health')`
+  also silenced any other route with `health` anywhere in it.
+- Logs carry `version` again, and `cookie` is redacted alongside `authorization`.
+
+### Added
+
+- `docker/docker-compose.yml` has the `healthcheck` the standard requires and the README already
+  claimed it had.
+- `docs/dev.md` and `docs/deploy.md`, both required by the standard and both missing.
+- `pnpm check:fleet` (`scripts/check-fleet.mjs`), reporting drift in the files that are meant to
+  be byte-identical across the fleet. The API-prefix helper, the exception filter and `main.ts`
+  had each drifted from the boilerplate with nothing to catch it.
+- `SHUTDOWN_FORCE_EXIT_SECONDS` in `.env.example`.
+
+### Removed
+
+- Dead code: the `Buffer.isBuffer` branch on a parameter typed as a stream, a `catch` clause
+  whose two arms rethrew the same value, `?? 0` fallbacks on sharp metadata fields that are not
+  optional, and the lint-only `tsconfig.eslint.json`, which had no effect since the move to
+  `projectService`.
+- The `haste` block and `injectGlobals` from the Jest configuration.
+
 - Fixed every body-carrying endpoint hanging forever against a real HTTP client. The client
   disconnect check treated `req.raw.destroyed` as a hang-up, but Node marks an `IncomingMessage`
   destroyed as soon as its body has been fully consumed — which is what a healthy request does.

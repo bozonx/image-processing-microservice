@@ -1,7 +1,11 @@
-/** @type {import('jest').Config} */
+/**
+ * Jest configuration. The structure is fleet-wide; only `coverageThreshold` is tuned per
+ * service, and it only ever moves up.
+ *
+ * @type {import('jest').Config}
+ */
 const moduleFileExtensions = ['ts', 'js', 'json'];
 
-// Common transform configuration
 const transform = {
   '^.+\\.ts$': [
     'ts-jest',
@@ -12,66 +16,61 @@ const transform = {
   ],
 };
 
+// Source files import each other with a `.js` extension, which is what Node's ESM loader
+// needs; ts-jest resolves the TypeScript file behind it.
+const moduleNameMapper = {
+  '^(\\.{1,2}/.*)\\.js$': '$1',
+};
+
+const project = {
+  preset: 'ts-jest/presets/default-esm',
+  testEnvironment: 'node',
+  moduleFileExtensions,
+  rootDir: '.',
+  // Tests import what they use from '@jest/globals', which is what gives the matchers their
+  // types. Injected globals would type-check as `any` and hide argument mistakes.
+  injectGlobals: false,
+  modulePathIgnorePatterns: ['<rootDir>/dist/'],
+  transform,
+  moduleNameMapper,
+};
+
 const config = {
   extensionsToTreatAsEsm: ['.ts'],
 
-  modulePathIgnorePatterns: ['<rootDir>/dist/'],
-
-  haste: {
-    throwOnModuleCollision: false,
-    hasteImplModulePath: undefined,
-  },
-
-  // Parallel test execution - use 50% of CPU cores locally, limit to 2 in CI
+  // Half the cores locally, two in CI where runners are small.
   maxWorkers: process.env.CI ? 2 : '50%',
-  // Stop test execution on first failure in CI for faster feedback
   bail: process.env.CI ? 1 : 0,
-  // Verbose output in CI for better debugging
   verbose: process.env.CI === 'true',
 
+  collectCoverageFrom: ['src/**/*.ts'],
+  coverageDirectory: 'coverage',
+  coveragePathIgnorePatterns: ['/node_modules/', '/dist/', '/test/', '.module.ts$', 'main.ts$'],
+  // A floor, not a target: it exists so a change cannot quietly delete coverage.
+  coverageThreshold: {
+    global: {
+      statements: 80,
+      branches: 65,
+      functions: 90,
+      lines: 80,
+    },
+  },
+
   projects: [
-    // Unit tests configuration
     {
+      ...project,
       displayName: 'unit',
-      preset: 'ts-jest/presets/default-esm',
-      injectGlobals: true,
-      testEnvironment: 'node',
-      moduleFileExtensions,
-      rootDir: '.',
       testMatch: ['<rootDir>/test/unit/**/*.spec.ts'],
-      modulePathIgnorePatterns: ['<rootDir>/dist/'],
       testPathIgnorePatterns: ['<rootDir>/test/e2e/', '<rootDir>/dist/'],
       setupFilesAfterEnv: ['<rootDir>/test/setup/unit.setup.ts'],
-      collectCoverageFrom: ['src/**/*.(t|j)s'],
-      coverageDirectory: 'coverage',
-      coveragePathIgnorePatterns: ['/node_modules/', '/dist/', '/test/', '.module.ts$', 'main.ts$'],
-      transform,
-      moduleNameMapper: {
-        '^(\\.{1,2}/.*)\\.js$': '$1',
-      },
-      // Global timeout for unit tests (default: 5 seconds)
       testTimeout: 5000,
     },
-    // E2E tests configuration
     {
+      ...project,
       displayName: 'e2e',
-      preset: 'ts-jest/presets/default-esm',
-      injectGlobals: true,
-      testEnvironment: 'node',
-      moduleFileExtensions,
-      rootDir: '.',
       testMatch: ['<rootDir>/test/e2e/**/*.e2e-spec.ts'],
-      setupFilesAfterEnv: ['<rootDir>/test/setup/e2e.setup.ts'],
-      modulePathIgnorePatterns: ['<rootDir>/dist/'],
       testPathIgnorePatterns: ['<rootDir>/dist/'],
-      collectCoverageFrom: ['src/**/*.(t|j)s'],
-      coverageDirectory: 'coverage',
-      coveragePathIgnorePatterns: ['/node_modules/', '/dist/', '/test/', '.module.ts$', 'main.ts$'],
-      transform,
-      moduleNameMapper: {
-        '^(\\.{1,2}/.*)\\.js$': '$1',
-      },
-      // Global timeout for e2e tests (default: 30 seconds)
+      setupFilesAfterEnv: ['<rootDir>/test/setup/e2e.setup.ts'],
       testTimeout: 30000,
     },
   ],
