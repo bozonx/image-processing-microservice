@@ -27,8 +27,5 @@
     "node_modules",
     "dist",
     "coverage"
-  ],
-  "ts-node": {
-    "esm": true
-  }
+  ]
 }

@@ -8,7 +8,7 @@ import 'reflect-metadata';
  * - All nock interceptors are cleaned after each test
  *
  * Timeout:
- * - Global timeout for unit tests is configured in jest.config.ts (5 seconds)
+ * - Global timeout for unit tests is configured in jest.config.js (5 seconds)
  * - Override per-test if needed using jest.setTimeout() or passing timeout as third arg to it()
  */
 

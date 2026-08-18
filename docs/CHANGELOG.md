@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Optimized dependencies and test configuration: converted Jest configuration to native ESM `jest.config.js`, removed redundant `ts-node` and `tsconfig-paths` devDependencies, updated `p-queue` and `@jest/globals` to latest minor releases, and cleaned up tsconfig configurations.
 - Updated `README.md` to fix heading hierarchy, add comprehensive API usage and parameter references, and remove trailing whitespace.
 - Relocated validation errors helper to `src/common/utils/validation-errors.ts` to adhere strictly to the `src/` layout convention (`common/`, `config/`, `modules/`).
 - Fixed static `public/` directory path resolution in `src/main.ts` so bundled UI assets are served properly in Docker containers.

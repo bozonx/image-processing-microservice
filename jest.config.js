@@ -1,6 +1,4 @@
-import type { Config } from 'jest';
-
-// Common module file extensions
+/** @type {import('jest').Config} */
 const moduleFileExtensions = ['ts', 'js', 'json'];
 
 // Common transform configuration
@@ -14,7 +12,7 @@ const transform = {
   ],
 };
 
-const config: Config = {
+const config = {
   extensionsToTreatAsEsm: ['.ts'],
 
   modulePathIgnorePatterns: ['<rootDir>/dist/'],
