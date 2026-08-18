@@ -5,6 +5,7 @@
  * All mocks follow the DRY principle and provide type-safe implementations.
  */
 
+import { jest } from '@jest/globals';
 import type { PinoLogger } from 'nestjs-pino';
 import type { ConfigService } from '@nestjs/config';
 
