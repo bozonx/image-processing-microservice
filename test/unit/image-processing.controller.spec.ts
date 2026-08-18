@@ -388,6 +388,29 @@ describe('ImageProcessingController', () => {
       await expect(controller.process(req as any, {} as any)).rejects.toThrow('Invalid params');
     });
 
+    it('should throw BadRequestException for non-whitelisted properties in params', async () => {
+      const filePart = {
+        type: 'file',
+        fieldname: 'file',
+        mimetype: 'image/jpeg',
+        file: Readable.from([Buffer.from('main-image')]),
+      };
+      const paramsPart = {
+        type: 'field',
+        fieldname: 'params',
+        value: JSON.stringify({
+          transform: {
+            reisze: { width: 100 },
+          },
+        }),
+      };
+
+      const req = mockReq([filePart, paramsPart]);
+      await expect(controller.process(req as any, {} as any)).rejects.toThrow(
+        'property reisze should not exist',
+      );
+    });
+
     it('should throw PayloadTooLargeException when multipart upload exceeds limit', async () => {
       const filePart = {
         type: 'file',

@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+- Fixed security, validation, UI routing, and lifecycle issues:
+  - Hardened secret comparison in `auth.hook.ts` using `crypto.timingSafeEqual` with SHA-256 fixed-length digests to prevent timing side-channel attacks on Basic credentials and Bearer tokens.
+  - Normalized trailing slashes when matching request paths against `publicPaths`, preventing `/api/v1/health/` from returning 401 Unauthorized.
+  - Enforced `{ whitelist: true, forbidNonWhitelisted: true }` on manual validation calls across `ImageProcessingController`, rejecting unknown/misspelled properties with HTTP 400.
+  - Prevented double-wrapped `BadRequestException` validation messages in multipart params handlers.
+  - Fixed `API_BASE` regex in `public/app.js` to correctly resolve API prefix when accessing `/ui/index.html` directly.
+  - Added global `unhandledRejection` / `uncaughtException` process handlers and `.catch()` on `bootstrap()`.
+  - Hardened graceful shutdown error handling and safe process exit in `main.ts`.
+  - Added NaN protection for `FILE_MAX_BYTES_MB` parsing in `createFastifyAdapter`.
+  - Removed no-op `constraints: {}` and switched `join(__filename, '..')` to `dirname(__filename)` in `configure-app.ts`.
+  - Cleaned up dead `Readable` stream code and duplicate `maxBytes` checks from `ExifService`.
+  - Updated `QueueService` capacity calculation to include both queued and pending active tasks (`queue.size + queue.pending >= maxQueueSize`).
+  - Pruned redundant HTTP 3xx log level check in `logger.factory.ts`.
+  - Passed GIF encoding options (`effort` clamped to 1..10, `colors`, `dither`, `progressive`) to `Sharp.gif()` in `ImageProcessorService`.
+
 - Fixed architectural design issues:
   - Moved multipart parsing in `/process` and `/exif` inside the concurrency-limited queue task, preventing memory exhaustion (10GB potential queue buffering vs 1GB container limit) and achieving memory parity with `/process/raw`.
   - Removed `await finished(res.raw)` and response delivery from inside queue concurrency tasks across all endpoints, ensuring slow network clients do not hold execution worker slots.

@@ -1,7 +1,7 @@
 import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fastify';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import fastifyStatic from '@fastify/static';
 import type { AppConfig } from './config/app.config.js';
@@ -11,11 +11,12 @@ import { createAuthHook } from './common/auth/auth.hook.js';
 import { buildApiPrefix, buildUiPrefix } from './common/http/api-prefix.js';
 
 const __filename = fileURLToPath(import.meta.url);
-const __dirname = join(__filename, '..');
+const __dirname = dirname(__filename);
 
 export function createFastifyAdapter(options?: { bodyLimit?: number }): FastifyAdapter {
-  const bodyLimitBytes =
-    options?.bodyLimit ?? parseInt(process.env.FILE_MAX_BYTES_MB ?? '100', 10) * 1024 * 1024;
+  const parsedMb = Number.parseInt(process.env.FILE_MAX_BYTES_MB ?? '100', 10);
+  const fileMaxMb = Number.isFinite(parsedMb) && parsedMb > 0 ? parsedMb : 100;
+  const bodyLimitBytes = options?.bodyLimit ?? fileMaxMb * 1024 * 1024;
 
   return new FastifyAdapter({
     logger: false,
@@ -83,7 +84,6 @@ export async function configureApp(app: NestFastifyApplication): Promise<void> {
     await app.register(fastifyStatic, {
       root: publicPath,
       prefix: uiPrefix,
-      constraints: {},
     });
   }
 }

@@ -51,7 +51,7 @@ export class ImageProcessingController {
       const parsed = JSON.parse(raw);
       const dto = plainToInstance(ProcessImageDto, parsed);
 
-      const errors = await validate(dto);
+      const errors = await validate(dto, { whitelist: true, forbidNonWhitelisted: true });
       if (errors.length > 0) {
         throw new BadRequestException(formatValidationErrors(errors));
       }
@@ -76,7 +76,7 @@ export class ImageProcessingController {
       const parsed = JSON.parse(raw);
       const dto = plainToInstance(ExtractExifDto, parsed);
 
-      const errors = await validate(dto);
+      const errors = await validate(dto, { whitelist: true, forbidNonWhitelisted: true });
       if (errors.length > 0) {
         throw new BadRequestException(formatValidationErrors(errors));
       }
@@ -205,7 +205,10 @@ export class ImageProcessingController {
                   const parsed = JSON.parse(fieldValue);
                   dto = plainToInstance(ProcessImageDto, parsed);
 
-                  const errors = await validate(dto);
+                  const errors = await validate(dto, {
+                    whitelist: true,
+                    forbidNonWhitelisted: true,
+                  });
                   if (errors.length > 0) {
                     throw new BadRequestException(formatValidationErrors(errors));
                   }
@@ -441,7 +444,10 @@ export class ImageProcessingController {
                   const parsed = JSON.parse(fieldValue);
                   const dto = plainToInstance(ExtractExifDto, parsed);
 
-                  const errors = await validate(dto);
+                  const errors = await validate(dto, {
+                    whitelist: true,
+                    forbidNonWhitelisted: true,
+                  });
                   if (errors.length > 0) {
                     throw new BadRequestException(formatValidationErrors(errors));
                   }

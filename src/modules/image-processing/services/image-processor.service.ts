@@ -367,7 +367,15 @@ export class ImageProcessorService {
           adaptiveFiltering: output?.adaptiveFiltering,
         });
       case 'gif':
-        return pipeline.gif();
+        return pipeline.gif({
+          effort:
+            output?.effort !== undefined
+              ? Math.max(1, Math.min(10, output.effort))
+              : Math.max(1, Math.min(10, this.defaults.effort || 7)),
+          colors: output?.colors,
+          dither: output?.dither,
+          progressive: output?.progressive,
+        });
       case 'tiff':
         return pipeline.tiff({ quality });
       case 'raw':

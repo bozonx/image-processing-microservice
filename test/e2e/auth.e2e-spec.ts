@@ -77,6 +77,16 @@ describe('Auth (e2e)', () => {
       expect(response.statusCode).toBe(200);
     });
 
+    it('keeps health with trailing slash public without 401 unauthorized', async () => {
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/v1/health/',
+      });
+
+      // Public path normalization prevents 401; route is resolved or 404
+      expect(response.statusCode).not.toBe(401);
+    });
+
     it('allows API with correct basic authorization', async () => {
       const response = await app.inject({
         method: 'GET',

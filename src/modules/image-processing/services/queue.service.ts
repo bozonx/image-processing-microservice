@@ -65,7 +65,7 @@ export class QueueService implements OnModuleDestroy {
       throw new Error('Request aborted');
     }
 
-    if (this.maxQueueSize > 0 && this.queue.size >= this.maxQueueSize) {
+    if (this.maxQueueSize > 0 && this.queue.size + this.queue.pending >= this.maxQueueSize) {
       throw new HttpException('Queue is overloaded', HttpStatus.TOO_MANY_REQUESTS);
     }
 

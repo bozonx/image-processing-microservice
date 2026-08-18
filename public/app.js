@@ -1,6 +1,6 @@
 // API Configuration
-// Navigate from /ui to /api/v1 relative to the current path
-const API_BASE = window.location.pathname.replace(/\/ui\/?$/, '') + '/api/v1';
+// Navigate from /ui (or /ui/index.html) to /api/v1 relative to the current path
+const API_BASE = window.location.pathname.replace(/\/ui(?:\/index\.html|\/)?$/, '') + '/api/v1';
 
 
 // State

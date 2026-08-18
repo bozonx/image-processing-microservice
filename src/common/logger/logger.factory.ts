@@ -59,9 +59,6 @@ export const getLoggerConfig = (configService: ConfigService): Params => {
         if (res.statusCode >= 400) {
           return 'warn';
         }
-        if (res.statusCode >= 300) {
-          return 'info';
-        }
         return 'info';
       },
       autoLogging: {

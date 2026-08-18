@@ -1,3 +1,4 @@
+import { createHash, timingSafeEqual } from 'node:crypto';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { buildPrefixedPath } from '../http/api-prefix.js';
 
@@ -9,6 +10,17 @@ export interface AuthHookOptions {
   basicPass?: string;
   bearerTokens: string[];
   publicPaths?: string[];
+}
+
+function safeCompare(a: string, b: string): boolean {
+  const hashA = createHash('sha256').update(a).digest();
+  const hashB = createHash('sha256').update(b).digest();
+  return timingSafeEqual(hashA, hashB);
+}
+
+function normalizePath(path: string): string {
+  const trimmed = path.replace(/\/+$/, '');
+  return trimmed === '' ? '/' : trimmed;
 }
 
 function unauthorized(res: FastifyReply, allowBasic: boolean, allowBearer: boolean): void {
@@ -48,14 +60,20 @@ function isBasicValid(authHeader: string, user: string, pass: string): boolean {
   if (idx < 0) return false;
   const u = decoded.slice(0, idx);
   const p = decoded.slice(idx + 1);
-  return u === user && p === pass;
+  return safeCompare(u, user) && safeCompare(p, pass);
 }
 
 function isBearerValid(authHeader: string, tokens: string[]): boolean {
   const match = /^Bearer\s+(.+)$/i.exec(authHeader);
   const token = match?.[1]?.trim();
   if (!token) return false;
-  return tokens.includes(token);
+  let matched = false;
+  for (const expectedToken of tokens) {
+    if (safeCompare(token, expectedToken)) {
+      matched = true;
+    }
+  }
+  return matched;
 }
 
 export function createAuthHook(options: AuthHookOptions) {
@@ -82,8 +100,13 @@ export function createAuthHook(options: AuthHookOptions) {
     if (!anyAuthEnabled) return;
 
     const url = req.raw.url ?? '';
-    const pathname = url.split('?', 1)[0];
-    if (options.publicPaths?.some(path => pathname === buildPrefixedPath(options.basePath, path))) {
+    const pathname = url.split('?', 1)[0] ?? '';
+    const normalizedPathname = normalizePath(pathname);
+    if (
+      options.publicPaths?.some(
+        path => normalizedPathname === normalizePath(buildPrefixedPath(options.basePath, path)),
+      )
+    ) {
       return;
     }
 

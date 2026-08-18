@@ -1,9 +1,6 @@
-import { BadRequestException, Injectable, Logger, PayloadTooLargeException } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import sharp from 'sharp';
 import exifr from 'exifr';
-import { Readable } from 'node:stream';
-import type { ImageConfig } from '../../../config/image.config.js';
 
 /**
  * Service for extracting EXIF metadata from images using the exifr library.
@@ -11,44 +8,19 @@ import type { ImageConfig } from '../../../config/image.config.js';
 @Injectable()
 export class ExifService {
   private readonly logger = new Logger(ExifService.name);
-  private readonly maxBytes: number;
-
-  constructor(private readonly configService: ConfigService) {
-    const config = this.configService.getOrThrow<ImageConfig>('image');
-    this.maxBytes = config.maxBytes;
-  }
 
   /**
    * Extracts EXIF metadata from image data.
    *
-   * @param input - The image data (Buffer or Stream).
+   * @param input - The image buffer.
    * @param mimeType - The MIME type of the image.
    * @returns A record of EXIF data or null if extraction fails or no data is found.
    */
-  public async extract(
-    input: Readable | Buffer,
-    mimeType: string,
-  ): Promise<Record<string, unknown> | null> {
+  public async extract(input: Buffer, mimeType: string): Promise<Record<string, unknown> | null> {
     const startTime = Date.now();
 
     try {
-      let buffer: Buffer;
-
-      if (Buffer.isBuffer(input)) {
-        buffer = input;
-      } else {
-        const chunks: Buffer[] = [];
-        let totalLength = 0;
-
-        for await (const chunk of input) {
-          totalLength += chunk.length;
-          if (totalLength > this.maxBytes) {
-            throw new PayloadTooLargeException(`Image size exceeds maximum ${this.maxBytes} bytes`);
-          }
-          chunks.push(Buffer.from(chunk));
-        }
-        buffer = Buffer.concat(chunks);
-      }
+      const buffer = input;
 
       // Check MIME type first
       if (!mimeType.startsWith('image/')) {
@@ -99,10 +71,6 @@ export class ExifService {
         error: errorMessage,
         stack: error instanceof Error ? error.stack : undefined,
       });
-
-      if (error instanceof PayloadTooLargeException) {
-        throw error;
-      }
 
       if (error instanceof BadRequestException) {
         throw error;

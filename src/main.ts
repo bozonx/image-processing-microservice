@@ -54,13 +54,32 @@ function registerShutdown(app: NestFastifyApplication, drainSeconds: number, log
     logger.log(`${signal} received, draining for ${drainSeconds}s`, 'Shutdown');
     app.get(HealthService).startDraining();
     if (drainSeconds > 0) await sleep(drainSeconds * 1000);
-    await app.close();
-    logger.log('Shutdown complete', 'Shutdown');
-    process.exit(0);
+    try {
+      await app.close();
+      logger.log('Shutdown complete', 'Shutdown');
+    } catch (err) {
+      logger.error('Error during shutdown', err instanceof Error ? err.stack : err, 'Shutdown');
+      process.exit(1);
+    }
   };
   for (const signal of ['SIGTERM', 'SIGINT'] as const) {
     process.on(signal, () => void shutdown(signal));
   }
 }
 
-void bootstrap();
+/* eslint-disable no-console */
+process.on('unhandledRejection', reason => {
+  console.error('Unhandled Rejection:', reason);
+  process.exit(1);
+});
+
+process.on('uncaughtException', error => {
+  console.error('Uncaught Exception:', error);
+  process.exit(1);
+});
+
+bootstrap().catch(err => {
+  console.error('Fatal bootstrap error:', err);
+  process.exit(1);
+});
+/* eslint-enable no-console */
