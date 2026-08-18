@@ -53,14 +53,54 @@ describe('QueueService', () => {
     await expect(service.add(task)).rejects.toThrow('Task failed');
   });
 
-  it('should timeout if request takes too long', async () => {
+  it('should timeout if request takes too long and abort the task signal', async () => {
     // Override requestTimeout for this test
-    (service as any).requestTimeout = 100;
+    (service as any).requestTimeout = 50;
 
-    // Create a slow task
-    const slowTask = () => new Promise<string>(resolve => setTimeout(() => resolve('done'), 200));
+    let wasAborted = false;
+    // Create a slow task that observes signal
+    const slowTask = async (signal: AbortSignal) => {
+      signal.addEventListener('abort', () => {
+        wasAborted = true;
+      });
+      await new Promise(resolve => setTimeout(resolve, 150));
+      return 'done';
+    };
 
     await expect(service.add(slowTask)).rejects.toThrow('Request timeout');
+    expect(wasAborted).toBe(true);
+  });
+
+  it('should map p-queue TimeoutError to GatewayTimeoutException (504)', async () => {
+    const { TimeoutError } = await import('p-queue');
+    const { GatewayTimeoutException } = await import('@nestjs/common');
+
+    // Simulate p-queue throwing TimeoutError on job execution timeout
+    const timeoutTask = jest.fn<() => Promise<string>>().mockRejectedValue(new TimeoutError());
+
+    await expect(service.add(timeoutTask)).rejects.toThrow(GatewayTimeoutException);
+    await expect(service.add(timeoutTask)).rejects.toThrow('Task execution timed out');
+  });
+
+  it('should abort task when external signal aborts', async () => {
+    const clientController = new AbortController();
+    let wasAborted = false;
+
+    const task = async (signal: AbortSignal) => {
+      signal.addEventListener('abort', () => {
+        wasAborted = true;
+      });
+      await new Promise(resolve => setTimeout(resolve, 100));
+      return 'done';
+    };
+
+    const promise = service.add(task, 2, clientController.signal);
+    setTimeout(() => {
+      clientController.abort();
+    }, 10);
+
+    await expect(promise).rejects.toThrow();
+    expect(wasAborted).toBe(true);
   });
 
   it('should prioritize higher priority tasks', async () => {

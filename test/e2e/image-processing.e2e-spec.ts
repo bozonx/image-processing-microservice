@@ -63,7 +63,7 @@ describe('Image Processing (e2e)', () => {
       expect(metadata.height).toBe(100);
     });
 
-    it('should handle corrupt image file', async () => {
+    it('should return 400 for corrupt image file', async () => {
       const boundary = '--------------------------testboundary';
       const crlf = '\r\n';
 
@@ -75,60 +75,192 @@ describe('Image Processing (e2e)', () => {
 
       const payload = Buffer.concat([header, corruptData, footer]);
 
-      let response:
-        | {
-            statusCode: number;
-            rawPayload: Buffer;
-          }
-        | undefined;
-      let thrown: unknown;
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/v1/process',
+        headers: {
+          'Content-Type': `multipart/form-data; boundary=${boundary}`,
+        },
+        payload: payload,
+      });
 
-      try {
-        response = await app.inject({
-          method: 'POST',
-          url: '/api/v1/process',
-          headers: {
-            'Content-Type': `multipart/form-data; boundary=${boundary}`,
-          },
-          payload: payload,
-        });
-      } catch (e) {
-        thrown = e;
-      }
+      expect(response.statusCode).toBe(400);
+      const body = JSON.parse(response.body);
+      expect(body.statusCode).toBe(400);
+      expect(body.message).toMatch(/Failed to process image/i);
+    });
 
-      // The server might return 500 or the stream might just error out.
-      // Since we are validating edge cases, we want to know what happens.
-      // Typically, if the stream errors during transmission, the status code might be 200 (headers already sent)
-      // but the body incomplete. Or if it fails early, it's 500.
-      // Given our implementation (failOnError: false in sharp, but then we consume stream),
-      // let's see. Sharp might error when trying to output, which happens when 'res.send' piping starts.
-      // Fastify might handle stream error.
+    it('should return 400 for out-of-bounds crop parameters', async () => {
+      const inputBuffer = await sharp({
+        create: {
+          width: 100,
+          height: 100,
+          channels: 3,
+          background: { r: 255, g: 0, b: 0 },
+        },
+      })
+        .jpeg()
+        .toBuffer();
 
-      // For now, let's just assert it doesn't crash the server (which we can't easily check here effectively
-      // without subsequent requests, but the test runner handles it).
+      const boundary = '--------------------------testboundary';
+      const crlf = '\r\n';
 
-      // We expect either a 500 (standard unhandled exception if caught early) or
-      // maybe a 200 but with broken body.
-      // However, usually API should return 400 for bad input if possible.
-      // But since we stream, we might not know it's bad until we process it.
+      const params = JSON.stringify({
+        transform: {
+          crop: { left: 50, top: 50, width: 200, height: 200 },
+        },
+      });
 
-      // Let's just log status and expect it to NOT be 200 OR if it is 200, the body should not be a valid image.
+      const header1 = Buffer.from(
+        `--${boundary}${crlf}Content-Disposition: form-data; name="params"${crlf}${crlf}${params}${crlf}` +
+          `--${boundary}${crlf}Content-Disposition: form-data; name="file"; filename="test.jpg"${crlf}Content-Type: image/jpeg${crlf}${crlf}`,
+      );
+      const footer = Buffer.from(`${crlf}--${boundary}--${crlf}`);
 
-      if (thrown) {
-        const message = thrown instanceof Error ? thrown.message : String(thrown);
-        expect(message.length).toBeGreaterThan(0);
-        return;
-      }
+      const payload = Buffer.concat([header1, inputBuffer, footer]);
 
-      expect(response).toBeDefined();
-      if (!response) return;
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/v1/process',
+        headers: {
+          'Content-Type': `multipart/form-data; boundary=${boundary}`,
+        },
+        payload,
+      });
 
-      if (response.statusCode === 200) {
-        await expect(sharp(response.rawPayload).metadata()).rejects.toThrow();
-        return;
-      }
+      expect(response.statusCode).toBe(400);
+      const body = JSON.parse(response.body);
+      expect(body.statusCode).toBe(400);
+    });
 
-      expect(response.statusCode).toBeGreaterThanOrEqual(400);
+    it('should return 400 for invalid flatten color string', async () => {
+      const inputBuffer = await sharp({
+        create: {
+          width: 100,
+          height: 100,
+          channels: 4,
+          background: { r: 255, g: 0, b: 0, alpha: 0.5 },
+        },
+      })
+        .png()
+        .toBuffer();
+
+      const boundary = '--------------------------testboundary';
+      const crlf = '\r\n';
+
+      const params = JSON.stringify({
+        transform: {
+          flatten: 'not-a-valid-color-123!!!',
+        },
+      });
+
+      const header1 = Buffer.from(
+        `--${boundary}${crlf}Content-Disposition: form-data; name="params"${crlf}${crlf}${params}${crlf}` +
+          `--${boundary}${crlf}Content-Disposition: form-data; name="file"; filename="test.png"${crlf}Content-Type: image/png${crlf}${crlf}`,
+      );
+      const footer = Buffer.from(`${crlf}--${boundary}--${crlf}`);
+
+      const payload = Buffer.concat([header1, inputBuffer, footer]);
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/v1/process',
+        headers: {
+          'Content-Type': `multipart/form-data; boundary=${boundary}`,
+        },
+        payload,
+      });
+
+      expect(response.statusCode).toBe(400);
+      const body = JSON.parse(response.body);
+      expect(body.statusCode).toBe(400);
+    });
+
+    it('should return 400 for invalid resize position', async () => {
+      const inputBuffer = await sharp({
+        create: {
+          width: 100,
+          height: 100,
+          channels: 3,
+          background: { r: 255, g: 0, b: 0 },
+        },
+      })
+        .jpeg()
+        .toBuffer();
+
+      const boundary = '--------------------------testboundary';
+      const crlf = '\r\n';
+
+      const params = JSON.stringify({
+        transform: {
+          resize: { width: 50, position: 'nonexistent_position' },
+        },
+      });
+
+      const header1 = Buffer.from(
+        `--${boundary}${crlf}Content-Disposition: form-data; name="params"${crlf}${crlf}${params}${crlf}` +
+          `--${boundary}${crlf}Content-Disposition: form-data; name="file"; filename="test.jpg"${crlf}Content-Type: image/jpeg${crlf}${crlf}`,
+      );
+      const footer = Buffer.from(`${crlf}--${boundary}--${crlf}`);
+
+      const payload = Buffer.concat([header1, inputBuffer, footer]);
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/v1/process',
+        headers: {
+          'Content-Type': `multipart/form-data; boundary=${boundary}`,
+        },
+        payload,
+      });
+
+      expect(response.statusCode).toBe(400);
+      const body = JSON.parse(response.body);
+      expect(body.statusCode).toBe(400);
+    });
+
+    it('should return 400 for invalid chromaSubsampling', async () => {
+      const inputBuffer = await sharp({
+        create: {
+          width: 100,
+          height: 100,
+          channels: 3,
+          background: { r: 255, g: 0, b: 0 },
+        },
+      })
+        .jpeg()
+        .toBuffer();
+
+      const boundary = '--------------------------testboundary';
+      const crlf = '\r\n';
+
+      const params = JSON.stringify({
+        output: {
+          format: 'jpeg',
+          chromaSubsampling: 'invalid:subsampling',
+        },
+      });
+
+      const header1 = Buffer.from(
+        `--${boundary}${crlf}Content-Disposition: form-data; name="params"${crlf}${crlf}${params}${crlf}` +
+          `--${boundary}${crlf}Content-Disposition: form-data; name="file"; filename="test.jpg"${crlf}Content-Type: image/jpeg${crlf}${crlf}`,
+      );
+      const footer = Buffer.from(`${crlf}--${boundary}--${crlf}`);
+
+      const payload = Buffer.concat([header1, inputBuffer, footer]);
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/v1/process',
+        headers: {
+          'Content-Type': `multipart/form-data; boundary=${boundary}`,
+        },
+        payload,
+      });
+
+      expect(response.statusCode).toBe(400);
+      const body = JSON.parse(response.body);
+      expect(body.statusCode).toBe(400);
     });
   });
 

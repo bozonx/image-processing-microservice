@@ -772,17 +772,69 @@ describe('ImageProcessorService', () => {
       const emptyStream = new Readable();
       emptyStream.push(null);
 
-      // The service now awaits toBuffer(), so it throws immediately if stream is empty
-      await expect(service.processStream(emptyStream, 'image/jpeg', {}, {})).rejects.toThrow();
+      await expect(service.processStream(emptyStream, 'image/jpeg', {}, {})).rejects.toThrow(
+        BadRequestException,
+      );
     });
 
-    it('should handle corrupt image data', async () => {
+    it('should handle corrupt image data with BadRequestException', async () => {
       await expect(
         processWrapper({
           image: Buffer.from('this is not a valid image').toString('base64'),
           mimeType: 'image/jpeg',
         }),
-      ).rejects.toThrow();
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('should throw BadRequestException when crop area is out of image boundaries', async () => {
+      const inputBuffer = await sharp({
+        create: {
+          width: 100,
+          height: 100,
+          channels: 3,
+          background: { r: 255, g: 0, b: 0 },
+        },
+      })
+        .jpeg()
+        .toBuffer();
+
+      await expect(
+        processWrapper({
+          image: inputBuffer.toString('base64'),
+          mimeType: 'image/jpeg',
+          transform: {
+            crop: {
+              left: 50,
+              top: 50,
+              width: 100,
+              height: 100,
+            },
+          },
+        }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('should throw BadRequestException for invalid flatten color string', async () => {
+      const inputBuffer = await sharp({
+        create: {
+          width: 50,
+          height: 50,
+          channels: 4,
+          background: { r: 255, g: 0, b: 0, alpha: 0.5 },
+        },
+      })
+        .png()
+        .toBuffer();
+
+      await expect(
+        processWrapper({
+          image: inputBuffer.toString('base64'),
+          mimeType: 'image/png',
+          transform: {
+            flatten: 'invalid_color_value',
+          },
+        }),
+      ).rejects.toThrow(BadRequestException);
     });
   });
 

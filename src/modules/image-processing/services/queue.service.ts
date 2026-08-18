@@ -4,11 +4,12 @@ import {
   Logger,
   ServiceUnavailableException,
   RequestTimeoutException,
+  GatewayTimeoutException,
   HttpException,
   HttpStatus,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import PQueue from 'p-queue';
+import PQueue, { TimeoutError } from 'p-queue';
 import type { ImageConfig } from '../../../config/image.config.js';
 
 /**
@@ -49,9 +50,10 @@ export class QueueService implements OnModuleDestroy {
    * @returns The result of the task execution.
    * @throws ServiceUnavailableException if the service is shutting down.
    * @throws RequestTimeoutException if the task (including wait time) exceeds requestTimeout.
+   * @throws GatewayTimeoutException if the task execution exceeds queue timeout.
    */
   public async add<T>(
-    task: () => Promise<T>,
+    task: (signal: AbortSignal) => Promise<T>,
     priority: number = 2,
     signal?: AbortSignal,
   ): Promise<T> {
@@ -69,26 +71,32 @@ export class QueueService implements OnModuleDestroy {
 
     const startTime = Date.now();
     let timeoutHandle: NodeJS.Timeout | undefined;
+    const internalAbortController = new AbortController();
+
+    const onExternalAbort = () => {
+      internalAbortController.abort(signal?.reason ?? new Error('Request aborted'));
+    };
+
+    if (signal) {
+      signal.addEventListener('abort', onExternalAbort, { once: true });
+    }
 
     // Mapping user priority (0-high, 2-low) to p-queue priority (high numbers run first)
     const internalPriority = 2 - Math.max(0, Math.min(2, priority));
 
     try {
-      const taskPromise = this.queue.add(task, { priority: internalPriority, signal });
+      timeoutHandle = setTimeout(() => {
+        const timeoutErr = new RequestTimeoutException(
+          `Request timeout (queueSize=${this.queue.size}, pending=${this.queue.pending})`,
+        );
+        internalAbortController.abort(timeoutErr);
+      }, this.requestTimeout);
 
-      // Create a timeout promise to reject if the total time exceeds requestTimeout
-      const timeoutPromise = new Promise<never>((_, reject) => {
-        timeoutHandle = setTimeout(() => {
-          reject(
-            new RequestTimeoutException(
-              `Request timeout (queueSize=${this.queue.size}, pending=${this.queue.pending})`,
-            ),
-          );
-        }, this.requestTimeout);
+      const result = await this.queue.add(() => task(internalAbortController.signal), {
+        priority: internalPriority,
+        signal: internalAbortController.signal,
       });
 
-      // Race between task execution (including wait time in queue) and the request timeout
-      const result = await Promise.race([taskPromise, timeoutPromise]);
       const duration = Date.now() - startTime;
 
       this.logger.debug({
@@ -103,6 +111,11 @@ export class QueueService implements OnModuleDestroy {
       const duration = Date.now() - startTime;
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
 
+      // Ensure internal abort controller is aborted on failure to halt background tasks
+      if (!internalAbortController.signal.aborted) {
+        internalAbortController.abort(error);
+      }
+
       // Don't log abort errors as failures
       if (errorMessage !== 'The operation was aborted' && errorMessage !== 'Request aborted') {
         this.logger.error({
@@ -112,10 +125,31 @@ export class QueueService implements OnModuleDestroy {
         });
       }
 
+      // Check if aborted due to request timeout
+      if (
+        internalAbortController.signal.reason instanceof RequestTimeoutException ||
+        (internalAbortController.signal.aborted &&
+          internalAbortController.signal.reason instanceof HttpException)
+      ) {
+        throw internalAbortController.signal.reason;
+      }
+
+      // Map p-queue TimeoutError to 504 GatewayTimeoutException
+      if (error instanceof TimeoutError || (error as Error)?.name === 'TimeoutError') {
+        throw new GatewayTimeoutException('Task execution timed out');
+      }
+
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
       throw error;
     } finally {
       if (timeoutHandle) {
         clearTimeout(timeoutHandle);
+      }
+      if (signal) {
+        signal.removeEventListener('abort', onExternalAbort);
       }
     }
   }

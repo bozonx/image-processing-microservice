@@ -14,7 +14,6 @@ import { ConfigService } from '@nestjs/config';
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
-import { finished } from 'node:stream/promises';
 import { Readable, Transform } from 'node:stream';
 import { ImageProcessorService } from './services/image-processor.service.js';
 import { ExifService } from './services/exif.service.js';
@@ -184,23 +183,22 @@ export class ImageProcessingController {
 
     const priority = dto.priority ?? 2;
 
-    // Use queue to process the image and hold the slot until the response is finished
+    let isClientDisconnected = false;
     const abortController = new AbortController();
-    res.raw.on('close', () => {
-      // If the response is not finished, it means the client disconnected prematurely
-      if (!res.raw.writableEnded) {
+    const onClientClose = () => {
+      if (req.raw.destroyed || res.raw.destroyed || !req.raw.complete) {
+        isClientDisconnected = true;
         abortController.abort();
       }
-    });
+    };
+
+    req.raw.on('close', onClientClose);
+    res.raw.on('close', onClientClose);
 
     try {
-      await this.queueService.add(
-        async () => {
-          if (abortController.signal.aborted) {
-            throw new Error('Request aborted');
-          }
-
-          const result = await this.imageProcessor.processStream(
+      const result = await this.queueService.add(
+        signal =>
+          this.imageProcessor.processStream(
             Readable.from(mainFileData.buffer),
             mainFileData.mimetype,
             dto.transform,
@@ -211,32 +209,28 @@ export class ImageProcessingController {
                   mimetype: watermarkFileData.mimetype,
                 }
               : undefined,
-            abortController.signal,
-          );
-
-          res.type(result.mimeType);
-          res.header('Content-Disposition', `inline; filename="processed.${result.extension}"`);
-          res.header('X-Image-Width', result.width.toString());
-          res.header('X-Image-Height', result.height.toString());
-          res.header('X-Image-Size', result.size.toString());
-          res.header('Content-Length', result.size.toString());
-
-          res.send(result.buffer);
-
-          // Wait until the response is completely sent to the client
-          await finished(res.raw);
-        },
+            signal,
+          ),
         priority,
         abortController.signal,
       );
+
+      res.type(result.mimeType);
+      res.header('Content-Disposition', `inline; filename="processed.${result.extension}"`);
+      res.header('X-Image-Width', result.width.toString());
+      res.header('X-Image-Height', result.height.toString());
+      res.header('X-Image-Size', result.size.toString());
+      res.header('Content-Length', result.size.toString());
+
+      return res.send(result.buffer);
     } catch (error) {
-      if (abortController.signal.aborted) {
-        // If aborted, we don't want to throw an internal server error if it was client disconnect
-        // But since we are in a controller, if we don't handle it, it bubbles up.
-        // NestJS might log it.
+      if (isClientDisconnected || res.raw.destroyed || res.raw.writableEnded) {
         return;
       }
       throw error;
+    } finally {
+      req.raw.removeListener('close', onClientClose);
+      res.raw.removeListener('close', onClientClose);
     }
   }
 
@@ -264,79 +258,76 @@ export class ImageProcessingController {
     }
 
     const priority = dto.priority ?? 2;
-
+    let isClientDisconnected = false;
     const abortController = new AbortController();
 
+    const limiter = this.createMaxBytesTransform(this.getMaxBytes());
+    const inputStream = (req.raw as unknown as Readable).pipe(limiter);
+    inputStream.on('error', () => {
+      // Prevent unhandled stream error events
+    });
+
+    const cleanup = () => {
+      try {
+        if (!inputStream.destroyed) {
+          inputStream.destroy();
+        }
+      } catch {
+        // ignore
+      }
+    };
+
+    const onClientClose = () => {
+      if (req.raw.destroyed || res.raw.destroyed || !req.raw.complete) {
+        isClientDisconnected = true;
+        abortController.abort();
+        cleanup();
+      }
+    };
+
+    const onClientError = () => {
+      isClientDisconnected = true;
+      abortController.abort();
+      cleanup();
+    };
+
+    req.raw.on('close', onClientClose);
+    res.raw.on('close', onClientClose);
+    res.raw.on('error', onClientError);
+
     try {
-      await this.queueService.add(
-        async () => {
-          if (abortController.signal.aborted) {
-            throw new Error('Request aborted');
-          }
-
-          const limiter = this.createMaxBytesTransform(this.getMaxBytes());
-          const inputStream = (req.raw as unknown as Readable).pipe(limiter);
-
-          const cleanup = (error?: Error) => {
-            try {
-              if (!inputStream.destroyed) {
-                inputStream.destroy(error);
-              }
-            } catch {
-              // ignore
-            }
-          };
-
-          const closeHandler = () => {
-            if (!res.raw.writableEnded && !res.raw.destroyed) {
-              abortController.abort();
-              cleanup(new Error('Client connection closed'));
-              return;
-            }
-            cleanup();
-          };
-
-          const errorHandler = (err: Error) => {
-            abortController.abort();
-            cleanup(err instanceof Error ? err : new Error('Response error'));
-          };
-
-          res.raw.once('close', closeHandler);
-          res.raw.once('error', errorHandler);
-
-          try {
-            const result = await this.imageProcessor.processStream(
-              inputStream,
-              acceptedMimeType,
-              dto.transform,
-              dto.output,
-              undefined,
-              abortController.signal,
-            );
-
-            res.type(result.mimeType);
-            res.header('Content-Disposition', `inline; filename="processed.${result.extension}"`);
-            res.header('X-Image-Width', result.width.toString());
-            res.header('X-Image-Height', result.height.toString());
-            res.header('X-Image-Size', result.size.toString());
-            res.header('Content-Length', result.size.toString());
-
-            res.send(result.buffer);
-            await finished(res.raw);
-          } finally {
-            res.raw.removeListener('close', closeHandler);
-            res.raw.removeListener('error', errorHandler);
-            cleanup();
-          }
-        },
+      const result = await this.queueService.add(
+        signal =>
+          this.imageProcessor.processStream(
+            inputStream,
+            acceptedMimeType,
+            dto.transform,
+            dto.output,
+            undefined,
+            signal,
+          ),
         priority,
         abortController.signal,
       );
+
+      res.type(result.mimeType);
+      res.header('Content-Disposition', `inline; filename="processed.${result.extension}"`);
+      res.header('X-Image-Width', result.width.toString());
+      res.header('X-Image-Height', result.height.toString());
+      res.header('X-Image-Size', result.size.toString());
+      res.header('Content-Length', result.size.toString());
+
+      return res.send(result.buffer);
     } catch (error) {
-      if (abortController.signal.aborted) {
+      if (isClientDisconnected || res.raw.destroyed || res.raw.writableEnded) {
         return;
       }
       throw error;
+    } finally {
+      req.raw.removeListener('close', onClientClose);
+      res.raw.removeListener('close', onClientClose);
+      res.raw.removeListener('error', onClientError);
+      cleanup();
     }
   }
 
@@ -393,44 +384,43 @@ export class ImageProcessingController {
     }
 
     const priority = dto.priority ?? 2;
+    let isClientDisconnected = false;
     const abortController = new AbortController();
 
-    res.raw.on('close', () => {
-      if (!res.raw.writableEnded) {
+    const onClientClose = () => {
+      if (req.raw.destroyed || res.raw.destroyed || !req.raw.complete) {
+        isClientDisconnected = true;
         abortController.abort();
       }
-    });
+    };
+
+    req.raw.on('close', onClientClose);
+    res.raw.on('close', onClientClose);
 
     try {
-      const result = await this.queueService.add(
-        async () => {
-          if (abortController.signal.aborted) {
-            throw new Error('Request aborted');
-          }
-
-          const rawExif = await this.exifService.extract(fileData.buffer, fileData.mimetype);
-
-          const { width, height, ...exif } = rawExif ?? {};
-          const responseBody = {
-            exif: Object.keys(exif).length > 0 ? exif : null,
-            width: typeof width === 'number' ? width : undefined,
-            height: typeof height === 'number' ? height : undefined,
-          };
-
-          res.send(responseBody);
-          await finished(res.raw);
-          return responseBody;
-        },
+      const rawExif = await this.queueService.add(
+        () => this.exifService.extract(fileData.buffer, fileData.mimetype),
         priority,
         abortController.signal,
       );
 
-      return result;
+      const { width, height, ...exif } = rawExif ?? {};
+      const responseBody = {
+        exif: Object.keys(exif).length > 0 ? exif : null,
+        width: typeof width === 'number' ? width : undefined,
+        height: typeof height === 'number' ? height : undefined,
+      };
+
+      res.send(responseBody);
+      return responseBody;
     } catch (error) {
-      if (abortController.signal.aborted) {
+      if (isClientDisconnected || res.raw.destroyed || res.raw.writableEnded) {
         return;
       }
       throw error;
+    } finally {
+      req.raw.removeListener('close', onClientClose);
+      res.raw.removeListener('close', onClientClose);
     }
   }
 }

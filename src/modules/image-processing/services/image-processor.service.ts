@@ -1,4 +1,4 @@
-import { Injectable, Logger, BadRequestException } from '@nestjs/common';
+import { Injectable, Logger, BadRequestException, HttpException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import sharp from 'sharp';
 import type { Metadata, OverlayOptions, Sharp, SharpOptions } from 'sharp';
@@ -55,47 +55,47 @@ export class ImageProcessorService {
       throw new BadRequestException(`Invalid MIME type: ${mimeType}`);
     }
 
-    const options = this.getSharpOptions(mimeType);
-    let pipeline: Sharp;
-
-    if (watermark && transform?.watermark) {
-      const inputBuffer = await this.streamToBuffer(inputStream);
-      let prePipeline = sharp(inputBuffer, { ...options, failOn: 'none' });
-      prePipeline = this.applyTransformations(prePipeline, transform);
-      const { data: intermediateBuffer, info } = await prePipeline.toBuffer({
-        resolveWithObject: true,
-      });
-
-      pipeline = sharp(intermediateBuffer, { failOn: 'none' });
-      await this.applyWatermark(pipeline, watermark.buffer, transform.watermark, {
-        width: info.width,
-        height: info.height,
-      });
-    } else {
-      pipeline = sharp({ ...options, failOn: 'none' });
-      pipeline = this.applyTransformations(pipeline, transform);
-      inputStream.pipe(pipeline);
-    }
-
-    pipeline = this.applyOutputFormat(pipeline, output);
-
-    const format = output?.format ?? this.defaults.format;
-    const isRaw = format === 'raw';
-
-    if (signal) {
-      if (signal.aborted) {
-        throw new Error('Request aborted');
-      }
-      signal.addEventListener(
-        'abort',
-        () => {
-          pipeline.destroy();
-        },
-        { once: true },
-      );
-    }
-
     try {
+      const options = this.getSharpOptions(mimeType);
+      let pipeline: Sharp;
+
+      if (watermark && transform?.watermark) {
+        const inputBuffer = await this.streamToBuffer(inputStream);
+        let prePipeline = sharp(inputBuffer, { ...options, failOn: 'none' });
+        prePipeline = this.applyTransformations(prePipeline, transform);
+        const { data: intermediateBuffer, info } = await prePipeline.toBuffer({
+          resolveWithObject: true,
+        });
+
+        pipeline = sharp(intermediateBuffer, { failOn: 'none' });
+        await this.applyWatermark(pipeline, watermark.buffer, transform.watermark, {
+          width: info.width,
+          height: info.height,
+        });
+      } else {
+        pipeline = sharp({ ...options, failOn: 'none' });
+        pipeline = this.applyTransformations(pipeline, transform);
+        inputStream.pipe(pipeline);
+      }
+
+      pipeline = this.applyOutputFormat(pipeline, output);
+
+      const format = output?.format ?? this.defaults.format;
+      const isRaw = format === 'raw';
+
+      if (signal) {
+        if (signal.aborted) {
+          throw new Error('Request aborted');
+        }
+        signal.addEventListener(
+          'abort',
+          () => {
+            pipeline.destroy();
+          },
+          { once: true },
+        );
+      }
+
       const { data, info } = await pipeline.toBuffer({ resolveWithObject: true });
 
       this.logger.log({
@@ -115,18 +115,21 @@ export class ImageProcessorService {
         size: info.size,
       };
     } catch (err) {
+      if (err instanceof HttpException) {
+        throw err;
+      }
+
       const error = err instanceof Error ? err : new Error(String(err));
       if (error.message === 'The operation was aborted' || error.message === 'Request aborted') {
         throw err;
       }
 
-      this.logger.error({
-        msg: 'Sharp pipeline error',
+      this.logger.warn({
+        msg: 'Sharp pipeline error mapped to BadRequestException',
         error: error.message,
-        stack: error.stack,
       });
 
-      throw err;
+      throw new BadRequestException(`Failed to process image: ${error.message}`);
     }
   }
 

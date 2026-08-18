@@ -4,6 +4,8 @@ import {
   IsNumber,
   IsBoolean,
   IsEnum,
+  IsIn,
+  Matches,
   ValidateNested,
   Min,
   Max,
@@ -19,6 +21,34 @@ export enum ImageFormat {
   TIFF = 'tiff',
   RAW = 'raw',
 }
+
+export const RESIZE_POSITIONS = [
+  'top',
+  'right top',
+  'right',
+  'right bottom',
+  'bottom',
+  'left bottom',
+  'left',
+  'left top',
+  'north',
+  'northeast',
+  'east',
+  'southeast',
+  'south',
+  'southwest',
+  'west',
+  'northwest',
+  'center',
+  'centre',
+  'entropy',
+  'attention',
+] as const;
+
+export type ResizePosition = (typeof RESIZE_POSITIONS)[number];
+
+export const CHROMA_SUBSAMPLINGS = ['4:2:0', '4:2:2', '4:4:4'] as const;
+export type ChromaSubsampling = (typeof CHROMA_SUBSAMPLINGS)[number];
 
 export class ResizeDto {
   @IsOptional()
@@ -48,8 +78,8 @@ export class ResizeDto {
   public withoutEnlargement?: boolean;
 
   @IsOptional()
-  @IsString()
-  public position?: string;
+  @IsIn(RESIZE_POSITIONS)
+  public position?: ResizePosition;
 }
 
 export class ExtractDto {
@@ -147,6 +177,9 @@ export class TransformDto {
 
   @IsOptional()
   @IsString()
+  @Matches(/^#([0-9a-fA-F]{3,8})$|^rgba?\([^)]+\)$|^hsla?\([^)]+\)$|^[a-zA-Z]+$/, {
+    message: 'flatten must be a valid color string (hex, rgb, rgba, hsl, hsla, or CSS color name)',
+  })
   public flatten?: string;
 
   @IsOptional()
@@ -195,8 +228,8 @@ export class OutputDto {
   public compressionLevel?: number;
 
   @IsOptional()
-  @IsString()
-  public chromaSubsampling?: string;
+  @IsIn(CHROMA_SUBSAMPLINGS)
+  public chromaSubsampling?: ChromaSubsampling;
 
   @IsOptional()
   @IsBoolean()

@@ -37,7 +37,10 @@ describe('ImageProcessingController', () => {
         {
           provide: QueueService,
           useValue: {
-            add: jest.fn((task: () => Promise<any>) => task()),
+            add: jest.fn(
+              (task: (signal: AbortSignal) => Promise<any>, _p?: number, signal?: AbortSignal) =>
+                task(signal ?? new AbortController().signal),
+            ),
             getStatus: jest.fn(),
           },
         },
@@ -85,12 +88,6 @@ describe('ImageProcessingController', () => {
   const mockRes = () => {
     const raw = new (class extends Writable {
       _header = true;
-      constructor() {
-        super();
-        setTimeout(() => {
-          this.end();
-        }, 0);
-      }
       override _write(_chunk: any, _encoding: string, callback: (error?: Error | null) => void) {
         callback();
       }
@@ -176,7 +173,11 @@ describe('ImageProcessingController', () => {
       jest
         .spyOn(queueService, 'add')
         .mockImplementation(
-          async (task: () => Promise<any>, _priority?: number, signal?: AbortSignal) => {
+          async (
+            task: (signal: AbortSignal) => Promise<any>,
+            _priority?: number,
+            signal?: AbortSignal,
+          ) => {
             if (signal?.aborted) {
               throw new Error('The operation was aborted');
             }
@@ -188,7 +189,7 @@ describe('ImageProcessingController', () => {
                 },
                 { once: true },
               );
-              task().then(resolve, reject);
+              task(signal ?? new AbortController().signal).then(resolve, reject);
             });
           },
         );
@@ -198,7 +199,7 @@ describe('ImageProcessingController', () => {
         .spyOn(imageProcessor, 'processStream')
         .mockImplementation(async (_input, _mime, _t, _o, _w, signal) => {
           // Wait a tick so the abort can fire
-          await new Promise(r => setTimeout(r, 10));
+          await new Promise(r => setTimeout(r, 20));
           if (signal?.aborted) {
             throw new Error('Request aborted');
           }
@@ -212,9 +213,9 @@ describe('ImageProcessingController', () => {
           };
         });
 
-      // Trigger abort by emitting 'close' on res.raw before processing completes
+      // Trigger abort by destroying res.raw before processing completes
       setTimeout(() => {
-        res.raw.emit('close');
+        res.raw.destroy();
       }, 5);
 
       await expect(controller.processRaw(req as any, res as any)).resolves.toBeUndefined();

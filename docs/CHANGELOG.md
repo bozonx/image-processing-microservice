@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Fixed error handling and validation for Sharp transformations:
+  - Added strict DTO validation with `@IsIn` for resize positions and output chromaSubsampling, and color regex matching for `flatten`.
+  - Mapped Sharp/libvips processing and input errors (corrupt data, out-of-bounds crop area, unsupported format/colors) to HTTP 400 (`BadRequestException`).
+  - Mapped `p-queue`'s `TimeoutError` to HTTP 504 (`GatewayTimeoutException`) in `QueueService`, and updated `.env.example` descriptions for `QUEUE_TIMEOUT_SECONDS` (task execution duration) and `REQUEST_TIMEOUT_SECONDS` (total request timeout).
+  - Ensured task `AbortSignal` is triggered upon queue/request timeouts in `QueueService` to immediately halt Sharp processing and release resources.
+  - Refactored `ImageProcessingController` to perform response sending outside queue tasks, eliminating "Headers already sent" race conditions and silent returns on abort.
+  - Updated e2e and unit tests to deterministically verify HTTP 400 responses for corrupt images and invalid transform parameters.
 - Fixed 6 critical functional bugs:
   - Fixed watermark scaling to compute dimensions against post-transformation (resized/cropped/rotated) intermediate buffer rather than raw input dimensions, preventing overlay dimension mismatches and Sharp 500 errors.
   - Mitigated DoS vulnerability in tiled watermark mode by validating step sizes and limiting maximum tile overlays to 2,000, returning HTTP 400 when exceeded.
