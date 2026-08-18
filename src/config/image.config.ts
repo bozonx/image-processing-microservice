@@ -127,8 +127,8 @@ export default registerAs('image', (): ImageConfig =>
       queue: {
         maxConcurrency: parseInt(process.env.MAX_CONCURRENCY ?? '4', 10),
         maxQueueSize: parseInt(process.env.QUEUE_MAX_SIZE ?? '100', 10),
-        timeout: parseInt(process.env.QUEUE_TIMEOUT_SECONDS ?? '60', 10) * 1000,
-        requestTimeout: parseInt(process.env.REQUEST_TIMEOUT_SECONDS ?? '120', 10) * 1000,
+        timeout: parseInt(process.env.QUEUE_TIMEOUT_SECONDS ?? '30', 10) * 1000,
+        requestTimeout: parseInt(process.env.REQUEST_TIMEOUT_SECONDS ?? '60', 10) * 1000,
       },
       defaults: {
         format: process.env.IMAGE_DEFAULT_FORMAT ?? DefaultImageFormat.WEBP,

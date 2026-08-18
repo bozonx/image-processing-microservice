@@ -118,7 +118,7 @@
 - Fixed error handling and validation for Sharp transformations:
   - Added strict DTO validation with `@IsIn` for resize positions and output chromaSubsampling, and color regex matching for `flatten`.
   - Mapped Sharp/libvips processing and input errors (corrupt data, out-of-bounds crop area, unsupported format/colors) to HTTP 400 (`BadRequestException`).
-  - Mapped `p-queue`'s `TimeoutError` to HTTP 504 (`GatewayTimeoutException`) in `QueueService`, and updated `.env.example` descriptions for `QUEUE_TIMEOUT_SECONDS` (task execution duration) and `REQUEST_TIMEOUT_SECONDS` (total request timeout).
+  - Mapped `p-queue`'s `TimeoutError` to HTTP 504 (`GatewayTimeoutException`) in `QueueService`, aligned code fallback defaults for `QUEUE_TIMEOUT_SECONDS` (30s) and `REQUEST_TIMEOUT_SECONDS` (60s), and updated `.env.example` descriptions.
   - Ensured task `AbortSignal` is triggered upon queue/request timeouts in `QueueService` to immediately halt Sharp processing and release resources.
   - Refactored `ImageProcessingController` to perform response sending outside queue tasks, eliminating "Headers already sent" race conditions and silent returns on abort.
   - Updated e2e and unit tests to deterministically verify HTTP 400 responses for corrupt images and invalid transform parameters.
