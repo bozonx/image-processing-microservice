@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Hardened GitHub Actions workflows: added explicit least-privilege permissions and concurrency controls to security scans, integrated `docker/metadata-action` for OCI tags and labels in releases, passed context variables via step environment variables, and configured Dependabot for automated action and dependency updates.
+- Modernized ESLint and TypeScript configurations: migrated to `typescript-eslint` v8 flat config helper, enabled `projectService` and `globals`, removed `eslint-plugin-prettier` in favor of separate formatting, enabled `noUncheckedIndexedAccess`, cleaned up JSON configs and removed redundant `.prettierrc`.
 - Fixed the Docker runtime entry point to launch the Nest build output at `dist/main.js`.
 - Upgraded `class-validator` to 0.15.1 after validating request DTOs with unit and e2e tests.
 - Split CI validation from tag-only multi-architecture image releases and aligned the fleet-wide

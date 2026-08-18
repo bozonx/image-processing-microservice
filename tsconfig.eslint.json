@@ -13,7 +13,6 @@
   ],
   "compilerOptions": {
     "allowJs": true,
-    "checkJs": false,
-    "moduleResolution": "node16"
+    "checkJs": false
   }
 }

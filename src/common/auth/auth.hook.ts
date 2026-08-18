@@ -43,11 +43,12 @@ function parseAuthorizationHeader(req: FastifyRequest): string | undefined {
 
 function isBasicValid(authHeader: string, user: string, pass: string): boolean {
   const match = /^Basic\s+(.+)$/i.exec(authHeader);
-  if (!match) return false;
+  const creds = match?.[1];
+  if (!creds) return false;
 
   let decoded: string;
   try {
-    decoded = Buffer.from(match[1], 'base64').toString('utf8');
+    decoded = Buffer.from(creds, 'base64').toString('utf8');
   } catch {
     return false;
   }
@@ -61,8 +62,8 @@ function isBasicValid(authHeader: string, user: string, pass: string): boolean {
 
 function isBearerValid(authHeader: string, tokens: string[]): boolean {
   const match = /^Bearer\s+(.+)$/i.exec(authHeader);
-  if (!match) return false;
-  const token = match[1].trim();
+  const token = match?.[1]?.trim();
+  if (!token) return false;
   return tokens.includes(token);
 }
 
