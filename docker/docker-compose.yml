@@ -11,10 +11,6 @@ services:
     restart: unless-stopped
     init: true
     stop_grace_period: 30s
-    ports:
-      # The container always listens on 8080: the Dockerfile sets LISTEN_PORT and compose
-      # interpolates from its own directory, not from ../.env. Only the host side varies.
-      - '${LISTEN_PORT:-8080}:8080'
     env_file:
       # required: false — in an orchestrator the environment comes from the platform and
       # there is no file to read.
