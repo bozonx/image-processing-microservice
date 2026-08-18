@@ -2,6 +2,38 @@
 
 ## Unreleased
 
+- Fixed every body-carrying endpoint hanging forever against a real HTTP client. The client
+  disconnect check treated `req.raw.destroyed` as a hang-up, but Node marks an `IncomingMessage`
+  destroyed as soon as its body has been fully consumed — which is what a healthy request does.
+  Each request aborted itself the instant its upload finished, processed the image anyway, and
+  then never sent the response. `complete` is now the test, since false there means the body
+  really did stop arriving early. The injected e2e suite could not see this, so the endpoints are
+  now also covered over a real socket in `test/e2e/real-socket.e2e-spec.ts`.
+- **Breaking (configuration).** `AUTH_BEARER_TOKENS` entries are now `name:token` pairs. The name
+  identifies the calling service in logs (`req.client`) and lets one caller be revoked without
+  rotating everyone else's token; a bare token is rejected at startup.
+- **Breaking (configuration).** `ENABLE_UI=true` combined with configured authentication is now a
+  startup error, and `ENABLE_UI` defaults to off. The bundled UI cannot present a Bearer token, so
+  serving it alongside a closed API meant publishing an unauthenticated description of that API.
+- Replaced the local fork of the auth hook with the fleet implementation from
+  `ivank-microservice-boilerplate`. The fork had drifted into three defects the shared version
+  never had: an unauthenticated bypass for a `/api/v1/download/` endpoint this service does not
+  have, allow-by-default handling that left every path outside `/api/v1` and `/ui` open, and a UI
+  carve-out that served the demo page unauthenticated whenever only Bearer tokens were configured.
+  Authorisation is now deny-by-default: health is public, everything else requires a credential.
+- Added `IMAGE_MAX_INPUT_PIXELS` (default 25M), passed to sharp's `limitInputPixels`. `FILE_MAX_BYTES_MB`
+  bounds the compressed upload only, so a small, highly compressed file could previously decode past
+  the container's memory limit and take down every in-flight request with it.
+- Replaced the unused `defaults.maxDimension` with `IMAGE_MAX_DIMENSION`, a real ceiling on returned
+  width and height: oversized resize requests are rejected, an image with no resize of its own is
+  scaled to fit, and a result pushed past the ceiling by `fit: 'outside'`, `rotate` or `crop` is
+  rejected. The ceiling is never appended to a request that resizes itself — sharp keeps only the
+  last `resize()` call, so doing that would silently discard what the caller asked for.
+- Enabled `trustProxy`, so logs record the calling host rather than the reverse proxy.
+- Logged the authenticated caller as `req.client`.
+- Documented the service's stateless, service-to-service design in `AGENTS.md`, and rewrote the
+  README's authentication and size-limit sections around it.
+
 - Fixed security, validation, UI routing, and lifecycle issues:
   - Hardened secret comparison in `auth.hook.ts` using `crypto.timingSafeEqual` with SHA-256 fixed-length digests to prevent timing side-channel attacks on Basic credentials and Bearer tokens.
   - Normalized trailing slashes when matching request paths against `publicPaths`, preventing `/api/v1/health/` from returning 401 Unauthorized.

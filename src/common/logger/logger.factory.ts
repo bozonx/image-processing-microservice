@@ -48,6 +48,12 @@ export const getLoggerConfig = (configService: ConfigService): Params => {
           stack: err.stack,
         }),
       },
+      // Emitted through customProps rather than the `req` serializer: Pino serializes the
+      // request bindings when the child logger is created, which is before the auth hook has
+      // identified the caller. customProps runs when the line is written.
+      customProps: req => ({
+        client: (req as unknown as { authClient?: string }).authClient,
+      }),
       redact: {
         paths: ['req.headers.authorization', 'req.headers["x-api-key"]'],
         censor: '[REDACTED]',

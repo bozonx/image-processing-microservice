@@ -162,8 +162,11 @@ export class ImageProcessingController {
 
     let isClientDisconnected = false;
     const abortController = new AbortController();
+    // `destroyed` is not a disconnect signal on the request: Node marks an IncomingMessage
+    // destroyed as soon as its body has been fully consumed, which is exactly what a healthy
+    // request does. `complete` is the honest test — false means the body never finished arriving.
     const onClientClose = () => {
-      if (req.raw?.destroyed || res.raw?.destroyed || !req.raw?.complete) {
+      if (!req.raw?.complete || res.raw?.destroyed) {
         isClientDisconnected = true;
         abortController.abort();
       }
@@ -327,8 +330,10 @@ export class ImageProcessingController {
       }
     };
 
+    // See the note in `process`: a consumed request body reports `destroyed`, so testing it here
+    // would abort every successful upload the moment it finished arriving.
     const onClientClose = () => {
-      if (req.raw?.destroyed || res.raw?.destroyed || !req.raw?.complete) {
+      if (!req.raw?.complete || res.raw?.destroyed) {
         isClientDisconnected = true;
         abortController.abort();
         cleanup();
@@ -409,8 +414,11 @@ export class ImageProcessingController {
     let isClientDisconnected = false;
     const abortController = new AbortController();
 
+    // `destroyed` is not a disconnect signal on the request: Node marks an IncomingMessage
+    // destroyed as soon as its body has been fully consumed, which is exactly what a healthy
+    // request does. `complete` is the honest test — false means the body never finished arriving.
     const onClientClose = () => {
-      if (req.raw?.destroyed || res.raw?.destroyed || !req.raw?.complete) {
+      if (!req.raw?.complete || res.raw?.destroyed) {
         isClientDisconnected = true;
         abortController.abort();
       }

@@ -37,5 +37,17 @@
 ## Service specifics
 
 - Stack: TypeScript, NestJS, Fastify, Sharp, Pino, Docker.
-- The service processes images and optionally serves its bundled UI from `public/`.
-- Entry point: `src/main.ts`.
+- Entry point: `src/main.ts`. Wiring shared by the app and the e2e suite is in
+  `src/configure-app.ts`; adding it only to `main.ts` would leave it untested.
+- Stateless. A request carries the image in and the result comes back in the response body.
+  There is no storage, no job id and no endpoint that hands out a result later. Proposals that
+  need one — async processing, download links, retry-by-id — change this property and are a
+  design decision, not an implementation detail.
+- Consumers are other services, not end users, and the service runs behind a reverse proxy.
+  Callers authenticate with a named Bearer token (`AUTH_BEARER_TOKENS=name:token`); health stays
+  public for probes and everything else is closed by default.
+- The bundled UI in `public/` is a development demo with no authentication of its own. It is off
+  by default and the service refuses to start when it is enabled alongside authentication.
+- Image work is bounded by three separate limits, and they are not interchangeable:
+  `FILE_MAX_BYTES_MB` bounds the upload, `IMAGE_MAX_INPUT_PIXELS` bounds what it decodes to, and
+  `IMAGE_MAX_DIMENSION` bounds what is returned.

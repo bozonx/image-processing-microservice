@@ -1,30 +1,40 @@
 import { registerAs } from '@nestjs/config';
 import { plainToClass } from 'class-transformer';
-import { IsOptional, IsString, validateSync } from 'class-validator';
+import { IsBoolean, IsString, validateSync } from 'class-validator';
+import { parseBearerTokens, type BearerToken } from '../common/auth/auth.hook.js';
 
 export class AuthConfig {
-  @IsOptional()
+  /** Basic auth user. Empty when Basic auth is not configured. */
   @IsString()
-  public basicUser?: string;
+  public basicUser!: string;
 
-  @IsOptional()
+  /** Basic auth password. Empty when Basic auth is not configured. */
   @IsString()
-  public basicPass?: string;
+  public basicPass!: string;
 
-  @IsOptional()
-  @IsString()
-  public bearerTokens?: string;
+  /** Accepted named Bearer credentials. Empty when Bearer auth is not configured. */
+  public bearerTokens!: BearerToken[];
+
+  /** True when any authentication method is configured. */
+  @IsBoolean()
+  public enabled!: boolean;
 }
 
-export default registerAs('auth', (): AuthConfig & { bearerTokenList: string[] } => {
+export default registerAs('auth', (): AuthConfig => {
+  const basicUser = (process.env.AUTH_BASIC_USER ?? '').trim();
+  const basicPass = (process.env.AUTH_BASIC_PASS ?? '').trim();
+  const bearerTokens = parseBearerTokens(process.env.AUTH_BEARER_TOKENS);
+
   const config = plainToClass(AuthConfig, {
-    basicUser: process.env.AUTH_BASIC_USER,
-    basicPass: process.env.AUTH_BASIC_PASS,
-    bearerTokens: process.env.AUTH_BEARER_TOKENS,
+    basicUser,
+    basicPass,
+    bearerTokens,
+    // Basic auth needs both halves; a half-configured pair is a mistake, not a setup.
+    enabled: (basicUser !== '' && basicPass !== '') || bearerTokens.length > 0,
   });
 
   const errors = validateSync(config, {
-    skipMissingProperties: true,
+    skipMissingProperties: false,
   });
 
   if (errors.length > 0) {
@@ -32,13 +42,11 @@ export default registerAs('auth', (): AuthConfig & { bearerTokenList: string[] }
     throw new Error(`Auth config validation error: ${errorMessages.join('; ')}`);
   }
 
-  const bearerTokenList = (config.bearerTokens ?? '')
-    .split(',')
-    .map(t => t.trim())
-    .filter(Boolean);
+  if ((basicUser === '') !== (basicPass === '')) {
+    throw new Error(
+      'Auth config validation error: AUTH_BASIC_USER and AUTH_BASIC_PASS must be set together',
+    );
+  }
 
-  return {
-    ...config,
-    bearerTokenList,
-  };
+  return config;
 });

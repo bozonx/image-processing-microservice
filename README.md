@@ -1,8 +1,11 @@
 # Image Processing Microservice
 
-A NestJS and Fastify service for streaming image transformations with Sharp. It supports resize,
-crop, rotation, watermarking, format conversion, EXIF extraction, queue limits and optional Basic
-or Bearer authentication.
+A NestJS and Fastify service for image transformations with Sharp. It supports resize, crop,
+rotation, watermarking, format conversion, EXIF extraction and queue limits.
+
+The service is stateless and built for service-to-service calls behind a reverse proxy: a request
+carries the image in and the result comes back in the same response. There is no storage and no
+endpoint that hands out a result later.
 
 ## Requirements
 
@@ -18,8 +21,9 @@ cp .env.example .env
 pnpm dev
 ```
 
-The API is available at `http://localhost:8080/api/v1`. When `ENABLE_UI=true`, the test UI is at
-`http://localhost:8080/ui`.
+The API is available at `http://localhost:8080/api/v1`. Setting `ENABLE_UI=true` also serves a
+demo UI at `http://localhost:8080/ui` — see [Authentication](#authentication) for when that is
+allowed.
 
 Run the compiled service with `pnpm build && pnpm start`. Run the container with `pnpm docker:up`.
 
@@ -57,11 +61,70 @@ Processed responses return dimensions and sizes in response headers: `X-Image-Wi
 Set `BASE_PATH` to place all endpoints below a proxy prefix. For example, `BASE_PATH=images`
 changes health to `/images/api/v1/health` and UI to `/images/ui`.
 
+## Authentication
+
+Callers are other services, so authentication is a shared secret per calling service rather than
+a user login. Configure it with `AUTH_BEARER_TOKENS`, a comma-separated list of `name:token`
+pairs:
+
+```
+AUTH_BEARER_TOKENS=svc-catalog:<token>,svc-uploader:<token>
+```
+
+Callers then send `Authorization: Bearer <token>`.
+
+- The name is not a secret and does not authenticate anything. It identifies the caller in logs
+  (`req.client`) and lets one service's token be revoked without rotating everyone else's. An
+  entry without a name is rejected at startup.
+- Tokens are compared as SHA-256 digests through `timingSafeEqual`, so neither a token's value
+  nor its length leaks through response timing.
+- Authentication is opt-in: with nothing configured the service is open, which is the intended
+  setup for local development. Once anything is configured, `GET /api/v1/health` stays public for
+  probes and **every other path requires a credential** — including paths that do not match a
+  route, so a route added later is closed until someone opens it deliberately.
+- `AUTH_BASIC_USER` / `AUTH_BASIC_PASS` exist because the fleet standard carries them, and both
+  must be set together. This service has no browser-facing consumer, so leaving them unset is the
+  expected configuration.
+
+The service trusts `X-Forwarded-For` (`trustProxy`), so run it behind a proxy that sets the header
+and does not accept it from the outside.
+
+### The demo UI
+
+`ENABLE_UI=true` serves the bundled page in `public/`. It is a development aid with no way to
+present a Bearer token, so **enabling it alongside configured authentication is a startup error**
+rather than a browsable, unauthenticated description of a closed API. It is off by default; use it
+locally with authentication unset, and leave it off everywhere else.
+
 ## Configuration
 
 `.env.example` is the complete configuration reference. The main settings are `LISTEN_HOST`,
-`LISTEN_PORT`, `BASE_PATH`, `ENABLE_UI`, `FILE_MAX_BYTES_MB`, `MAX_CONCURRENCY`, queue timeouts and
-optional `AUTH_BASIC_*` or `AUTH_BEARER_TOKENS` credentials. Health always remains public.
+`LISTEN_PORT`, `BASE_PATH`, `ENABLE_UI`, `MAX_CONCURRENCY`, the queue timeouts, the size limits
+below, and `AUTH_BEARER_TOKENS`.
+
+### Size limits
+
+Three separate limits bound the work a single request can cause. They are not interchangeable:
+
+| Variable | Bounds | Default |
+| --- | --- | --- |
+| `FILE_MAX_BYTES_MB` | The compressed upload, in MiB | `100` |
+| `IMAGE_MAX_INPUT_PIXELS` | Pixels a decoded input may expand to | `25000000` |
+| `IMAGE_MAX_DIMENSION` | Width and height of the returned image; `0` disables | `0` |
+
+`FILE_MAX_BYTES_MB` says nothing about memory: a 2 MB PNG can decode to tens of gigabytes.
+`IMAGE_MAX_INPUT_PIXELS` is what stops that, and it is a memory budget — roughly 4 bytes per
+pixel per concurrent task, so the default costs about 400 MiB at `MAX_CONCURRENCY=4`. Raise it
+only alongside the container's memory limit.
+
+`IMAGE_MAX_DIMENSION` is a ceiling on output, not a default size:
+
+- A request asking to resize beyond it is rejected with `400`, not silently shrunk — the caller
+  named an exact size and would otherwise discover the substitution downstream.
+- An image with no resize of its own is scaled down to fit inside it, preserving aspect ratio.
+- A result pushed past it by `fit: 'outside'`, an angled `rotate` or a large `crop` is rejected
+  with `400`.
+- `8192` is the most any configuration may allow; a larger value fails at startup.
 
 ## Deployment
 
@@ -73,6 +136,10 @@ Create `.env` from `.env.example`, then run `pnpm docker:up`. Compose enables in
 log rotation, a memory limit and a dependency-free health probe. In an orchestrator, supply
 environment variables through its secret/configuration mechanism instead of copying `.env` into
 the image.
+
+Compose limits the container to 1 GiB. If you raise `IMAGE_MAX_INPUT_PIXELS` or `MAX_CONCURRENCY`,
+raise that limit with them — exceeding it kills every in-flight request, not just the one that
+caused it.
 
 ## Development
 

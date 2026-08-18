@@ -11,6 +11,7 @@ import {
   Max,
 } from 'class-validator';
 import { Type } from 'class-transformer';
+import { MAX_SUPPORTED_DIMENSION } from '../../../config/image.config.js';
 
 export enum ImageFormat {
   WEBP = 'webp',
@@ -54,19 +55,19 @@ export class ResizeDto {
   @IsOptional()
   @IsNumber()
   @Min(1)
-  @Max(8192)
+  @Max(MAX_SUPPORTED_DIMENSION)
   public maxDimension?: number;
 
   @IsOptional()
   @IsNumber()
   @Min(1)
-  @Max(8192)
+  @Max(MAX_SUPPORTED_DIMENSION)
   public width?: number;
 
   @IsOptional()
   @IsNumber()
   @Min(1)
-  @Max(8192)
+  @Max(MAX_SUPPORTED_DIMENSION)
   public height?: number;
 
   @IsOptional()

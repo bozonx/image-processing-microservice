@@ -1,160 +1,217 @@
 import { createHash, timingSafeEqual } from 'node:crypto';
-import type { FastifyReply, FastifyRequest } from 'fastify';
-import { buildPrefixedPath } from '../http/api-prefix.js';
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 
-export interface AuthHookOptions {
-  basePath: string;
-  uiPrefix?: string;
-  apiPrefix: string;
-  basicUser?: string;
-  basicPass?: string;
-  bearerTokens: string[];
-  publicPaths?: string[];
+declare module 'node:http' {
+  interface IncomingMessage {
+    /**
+     * Name of the authenticated caller, set by the auth hook. Lives on the raw request so both
+     * application code and the Pino request serializer can read it.
+     */
+    authClient?: string;
+  }
 }
 
-function safeCompare(a: string, b: string): boolean {
-  const hashA = createHash('sha256').update(a).digest();
-  const hashB = createHash('sha256').update(b).digest();
-  return timingSafeEqual(hashA, hashB);
+/** A named Bearer credential: who the caller is, plus the secret it presents. */
+export interface BearerToken {
+  /** Stable name of the calling service. Appears in logs; never a secret. */
+  clientId: string;
+  /** The shared secret the caller sends in the Authorization header. */
+  token: string;
 }
 
+export interface AuthOptions {
+  /** Basic auth user. Empty disables Basic auth. */
+  basicUser: string;
+  /** Basic auth password. Empty disables Basic auth. */
+  basicPass: string;
+  /** Accepted named Bearer credentials. Empty disables Bearer auth. */
+  bearerTokens: BearerToken[];
+  /** Paths that stay public, without leading slash handling — compared after normalisation. */
+  publicPaths: string[];
+}
+
+/**
+ * Parses a comma-separated list of `name:token` pairs, dropping empty entries.
+ *
+ * Lives next to the hook rather than in a service's config so every service in the fleet reads
+ * the variable the same way.
+ *
+ * @param raw - Raw `AUTH_BEARER_TOKENS` value.
+ * @returns Named bearer credentials.
+ * @throws Error when an entry is not a `name:token` pair with both halves present.
+ */
+export function parseBearerTokens(raw: string | undefined): BearerToken[] {
+  const entries = (raw ?? '')
+    .split(',')
+    .map(entry => entry.trim())
+    .filter(entry => entry.length > 0);
+
+  return entries.map((entry, index) => {
+    // Split on the first colon only: a token may legitimately contain colons.
+    const separator = entry.indexOf(':');
+    const clientId = separator === -1 ? '' : entry.slice(0, separator).trim();
+    const token = separator === -1 ? '' : entry.slice(separator + 1).trim();
+
+    if (clientId === '' || token === '') {
+      // Never echo the entry itself — it holds a secret.
+      throw new Error(
+        `AUTH_BEARER_TOKENS entry #${index + 1} must be "name:token" with both halves non-empty`,
+      );
+    }
+
+    return { clientId, token };
+  });
+}
+
+/** Credentials pre-hashed at startup so no plaintext secret is compared per request. */
+interface PreparedCredentials {
+  bearer: { clientId: string; hash: Buffer }[];
+  basic?: { clientId: string; user: Buffer; pass: Buffer };
+}
+
+/**
+ * Hashes a credential so comparisons run over fixed-length buffers.
+ *
+ * @param value - Value to hash.
+ * @returns The 32-byte SHA-256 digest.
+ */
+function sha256(value: string): Buffer {
+  return createHash('sha256').update(value).digest();
+}
+
+/**
+ * Compares two digests without leaking their contents through timing.
+ *
+ * @param a - First digest.
+ * @param b - Second digest.
+ * @returns True when the digests are identical.
+ */
+function safeEqual(a: Buffer, b: Buffer): boolean {
+  // Digests are always 32 bytes, so timingSafeEqual can never throw on a length mismatch.
+  return a.length === b.length && timingSafeEqual(a, b);
+}
+
+/**
+ * Strips a trailing slash so `/x/` and `/x` are treated as the same route.
+ *
+ * @param path - Path to normalise.
+ * @returns The normalised path.
+ */
 function normalizePath(path: string): string {
   const trimmed = path.replace(/\/+$/, '');
   return trimmed === '' ? '/' : trimmed;
 }
 
-function unauthorized(res: FastifyReply, allowBasic: boolean, allowBearer: boolean): void {
-  const challenges: string[] = [];
-  if (allowBasic) challenges.push('Basic realm="Restricted"');
-  if (allowBearer) challenges.push('Bearer');
-
-  res
-    .code(401)
-    .header('WWW-Authenticate', challenges.length > 0 ? challenges.join(', ') : 'Basic')
-    .send({
-      statusCode: 401,
-      message: 'Unauthorized',
-    });
-}
-
-function parseAuthorizationHeader(req: FastifyRequest): string | undefined {
-  const header = req.headers['authorization'];
-  if (!header) return undefined;
-  if (Array.isArray(header)) return header[0];
-  return header;
-}
-
-function isBasicValid(authHeader: string, user: string, pass: string): boolean {
-  const match = /^Basic\s+(.+)$/i.exec(authHeader);
-  const creds = match?.[1];
-  if (!creds) return false;
-
-  let decoded: string;
-  try {
-    decoded = Buffer.from(creds, 'base64').toString('utf8');
-  } catch {
-    return false;
+/**
+ * Resolves an Authorization header to the name of the caller it authenticates.
+ *
+ * @param header - Raw Authorization header value.
+ * @param credentials - Pre-hashed credentials.
+ * @returns The caller name, or null when the header authenticates nobody.
+ */
+function identify(header: string | undefined, credentials: PreparedCredentials): string | null {
+  if (!header) {
+    return null;
   }
 
-  const idx = decoded.indexOf(':');
-  if (idx < 0) return false;
-  const u = decoded.slice(0, idx);
-  const p = decoded.slice(idx + 1);
-  return safeCompare(u, user) && safeCompare(p, pass);
-}
-
-function isBearerValid(authHeader: string, tokens: string[]): boolean {
-  const match = /^Bearer\s+(.+)$/i.exec(authHeader);
-  const token = match?.[1]?.trim();
-  if (!token) return false;
-  let matched = false;
-  for (const expectedToken of tokens) {
-    if (safeCompare(token, expectedToken)) {
-      matched = true;
-    }
+  const separator = header.indexOf(' ');
+  if (separator === -1) {
+    return null;
   }
-  return matched;
+  const scheme = header.slice(0, separator).toLowerCase();
+  const value = header.slice(separator + 1).trim();
+  if (value === '') {
+    return null;
+  }
+
+  if (scheme === 'bearer') {
+    const presented = sha256(value);
+    let matched: string | null = null;
+    // Every token is checked even after a match, so the time taken does not reveal which
+    // entry matched or how many entries are configured.
+    for (const candidate of credentials.bearer) {
+      if (safeEqual(presented, candidate.hash)) {
+        matched = candidate.clientId;
+      }
+    }
+    return matched;
+  }
+
+  if (scheme === 'basic' && credentials.basic) {
+    const decoded = Buffer.from(value, 'base64').toString('utf8');
+    const colon = decoded.indexOf(':');
+    if (colon === -1) {
+      return null;
+    }
+    // Both halves are compared before combining, so a wrong user costs the same as a wrong password.
+    const userOk = safeEqual(sha256(decoded.slice(0, colon)), credentials.basic.user);
+    const passOk = safeEqual(sha256(decoded.slice(colon + 1)), credentials.basic.pass);
+    return userOk && passOk ? credentials.basic.clientId : null;
+  }
+
+  return null;
 }
 
-export function createAuthHook(options: AuthHookOptions) {
-  const apiPrefix = buildPrefixedPath(options.basePath, options.apiPrefix);
-  const uiPrefix = options.uiPrefix
-    ? buildPrefixedPath(options.basePath, options.uiPrefix)
-    : undefined;
+/**
+ * Registers a global authentication hook on the Fastify instance.
+ *
+ * Authentication is opt-in: when no credentials are configured the hook is not registered
+ * at all and the service stays public. When any are configured, every route except the
+ * listed public paths requires a matching credential — a route added later is closed by
+ * default rather than open by default.
+ *
+ * The check runs in `onRequest`, before body parsing and before routing decisions, so it
+ * cannot be sidestepped by an unmatched route or an oversized payload.
+ *
+ * On success the caller's name is recorded on `request.raw.authClient` for logging.
+ *
+ * @param instance - Fastify instance to guard.
+ * @param options - Credentials and public paths.
+ */
+export function registerAuthHook(instance: FastifyInstance, options: AuthOptions): void {
+  const basicEnabled = options.basicUser !== '' && options.basicPass !== '';
+  const authEnabled = basicEnabled || options.bearerTokens.length > 0;
+  if (!authEnabled) {
+    return;
+  }
 
-  const basicUser = options.basicUser;
-  const basicPass = options.basicPass;
-  const basicEnabled =
-    typeof basicUser === 'string' &&
-    basicUser.length > 0 &&
-    typeof basicPass === 'string' &&
-    basicPass.length > 0;
-
-  const bearerEnabled = options.bearerTokens.length > 0;
-
-  const anyAuthEnabled = basicEnabled || bearerEnabled;
-
-  // Fastify treats a two-argument hook as promise-based; it must return a promise.
-  // eslint-disable-next-line @typescript-eslint/require-await
-  return async function authHook(req: FastifyRequest, res: FastifyReply) {
-    if (!anyAuthEnabled) return;
-
-    const url = req.raw.url ?? '';
-    const pathname = url.split('?', 1)[0] ?? '';
-    const normalizedPathname = normalizePath(pathname);
-    if (
-      options.publicPaths?.some(
-        path => normalizedPathname === normalizePath(buildPrefixedPath(options.basePath, path)),
-      )
-    ) {
-      return;
-    }
-
-    const isApi = url.startsWith(apiPrefix);
-    const isUi = uiPrefix ? url.startsWith(uiPrefix) : false;
-
-    if (!isApi && !isUi) return;
-
-    if (isApi) {
-      // Exception: allow download without auth
-      if (req.method === 'GET') {
-        const downloadPrefix = buildPrefixedPath(
-          options.basePath,
-          `${options.apiPrefix}/download/`,
-        );
-        if (url.startsWith(downloadPrefix)) return;
-      }
-
-      const authHeader = parseAuthorizationHeader(req);
-      if (!authHeader) {
-        unauthorized(res, basicEnabled, bearerEnabled);
-        return;
-      }
-
-      const isBasicOk =
-        basicEnabled &&
-        typeof basicUser === 'string' &&
-        typeof basicPass === 'string' &&
-        isBasicValid(authHeader, basicUser, basicPass);
-
-      const isBearerOk = bearerEnabled && isBearerValid(authHeader, options.bearerTokens);
-
-      if (!isBasicOk && !isBearerOk) {
-        unauthorized(res, basicEnabled, bearerEnabled);
-      }
-      return;
-    }
-
-    // UI: only Basic (Bearer does not apply to UI)
-    if (!basicEnabled || typeof basicUser !== 'string' || typeof basicPass !== 'string') {
-      return;
-    }
-
-    const authHeader = parseAuthorizationHeader(req);
-    if (authHeader && isBasicValid(authHeader, basicUser, basicPass)) {
-      return;
-    }
-
-    unauthorized(res, true, false);
+  const credentials: PreparedCredentials = {
+    bearer: options.bearerTokens.map(({ clientId, token }) => ({
+      clientId,
+      hash: sha256(token),
+    })),
+    basic: basicEnabled
+      ? {
+          clientId: `basic:${options.basicUser}`,
+          user: sha256(options.basicUser),
+          pass: sha256(options.basicPass),
+        }
+      : undefined,
   };
+
+  const publicPaths = new Set(
+    options.publicPaths.map(path => normalizePath(`/${path.replace(/^\/+|\/+$/g, '')}`)),
+  );
+
+  instance.addHook('onRequest', async (request: FastifyRequest, reply: FastifyReply) => {
+    // Compare the path only: the query string is not part of the route identity.
+    const path = normalizePath(request.url.split('?')[0] ?? '');
+
+    if (publicPaths.has(path)) {
+      return;
+    }
+
+    const clientId = identify(request.headers.authorization, credentials);
+    if (clientId !== null) {
+      request.raw.authClient = clientId;
+      return;
+    }
+
+    if (basicEnabled) {
+      void reply.header('WWW-Authenticate', 'Basic realm="restricted", charset="UTF-8"');
+    }
+    return reply
+      .status(401)
+      .send({ statusCode: 401, error: 'Unauthorized', message: 'Unauthorized' });
+  });
 }

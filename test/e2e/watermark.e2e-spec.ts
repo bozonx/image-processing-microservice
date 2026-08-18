@@ -270,7 +270,9 @@ describe('Watermark (e2e)', () => {
     });
 
     it('should return 400 when tiled watermark tile count exceeds limit', async () => {
-      const mainImage = await createTestImage(8000, 8000, { r: 255, g: 255, b: 255 });
+      // Kept under IMAGE_MAX_INPUT_PIXELS so this exercises the tile limit and not the pixel
+      // limit: a thin watermark still produces far more tiles than the cap allows.
+      const mainImage = await createTestImage(4000, 4000, { r: 255, g: 255, b: 255 });
       const watermark = await createTestImage(2000, 10, { r: 0, g: 0, b: 255 });
 
       const boundary = '--------------------------watermarktest';

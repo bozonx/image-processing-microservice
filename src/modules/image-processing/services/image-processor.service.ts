@@ -55,6 +55,8 @@ export class ImageProcessorService {
       throw new BadRequestException(`Invalid MIME type: ${mimeType}`);
     }
 
+    this.assertRequestedDimensions(transform);
+
     try {
       const options = this.getSharpOptions(mimeType);
       let pipeline: Sharp;
@@ -75,6 +77,7 @@ export class ImageProcessorService {
         inputStream.pipe(pipeline);
       }
 
+      pipeline = this.applyDimensionCap(pipeline, transform);
       pipeline = this.applyOutputFormat(pipeline, output);
 
       const format = output?.format ?? this.defaults.format;
@@ -94,6 +97,8 @@ export class ImageProcessorService {
       }
 
       const { data, info } = await pipeline.toBuffer({ resolveWithObject: true });
+
+      this.assertResultDimensions(info.width, info.height);
 
       this.logger.log({
         msg: 'Image processing finished',
@@ -134,11 +139,88 @@ export class ImageProcessorService {
    * Returns specific sharp options based on MIME type (e.g., enabling animation for GIFs).
    */
   private getSharpOptions(mimeType: string): SharpOptions {
-    const options: SharpOptions = {};
+    // `maxBytes` bounds the compressed upload; this bounds what it decodes to. Without it a
+    // small, highly compressed file can expand past the container's memory limit and take the
+    // whole process down, not just its own request.
+    const options: SharpOptions = { limitInputPixels: this.imageConfig.maxInputPixels };
     if (mimeType === 'image/gif') {
       options.animated = true;
     }
     return options;
+  }
+
+  /**
+   * Rejects a resize that asks for more than `IMAGE_MAX_DIMENSION` allows.
+   *
+   * Requested sizes are refused rather than silently clamped: the caller named an exact size,
+   * so quietly returning a different one would be a surprise discovered downstream.
+   *
+   * @param transform - The transformation parameters.
+   * @throws BadRequestException when a requested dimension exceeds the ceiling.
+   */
+  private assertRequestedDimensions(transform?: TransformDto): void {
+    const cap = this.imageConfig.maxDimension;
+    if (cap <= 0 || !transform?.resize) {
+      return;
+    }
+
+    const { resize } = transform;
+    for (const [name, value] of [
+      ['width', resize.width],
+      ['height', resize.height],
+      ['maxDimension', resize.maxDimension],
+    ] as const) {
+      if (value !== undefined && value > cap) {
+        throw new BadRequestException(
+          `transform.resize.${name} (${value}) exceeds the maximum allowed dimension of ${cap}`,
+        );
+      }
+    }
+  }
+
+  /**
+   * Appends the dimension ceiling as a resize step when the request has none of its own.
+   *
+   * Sharp keeps only the last `resize()` call, so this may never be combined with a caller's
+   * resize — doing so would silently discard what the caller asked for.
+   *
+   * @param pipeline - The current sharp instance.
+   * @param transform - The transformation parameters.
+   * @returns The pipeline, capped when the request left room for it.
+   */
+  private applyDimensionCap(pipeline: Sharp, transform?: TransformDto): Sharp {
+    const cap = this.imageConfig.maxDimension;
+    const hasOwnResize = Boolean(
+      transform?.resize?.width ?? transform?.resize?.height ?? transform?.resize?.maxDimension,
+    );
+
+    if (cap <= 0 || hasOwnResize) {
+      return pipeline;
+    }
+
+    return pipeline.resize(cap, cap, { fit: 'inside', withoutEnlargement: true });
+  }
+
+  /**
+   * Rejects a result that exceeds the dimension ceiling despite a valid request.
+   *
+   * `fit: 'outside'`, an angled `rotate` and a large `crop` can all push the output past the
+   * ceiling even when every requested number was within it. Re-encoding a second time would
+   * cost more than it saves for a case this rare, so the request is refused instead.
+   *
+   * @param width - Width of the produced image.
+   * @param height - Height of the produced image.
+   * @throws BadRequestException when the result exceeds the ceiling.
+   */
+  private assertResultDimensions(width: number, height: number): void {
+    const cap = this.imageConfig.maxDimension;
+    if (cap <= 0 || (width <= cap && height <= cap)) {
+      return;
+    }
+
+    throw new BadRequestException(
+      `Resulting image (${width}x${height}) exceeds the maximum allowed dimension of ${cap}`,
+    );
   }
 
   /**
