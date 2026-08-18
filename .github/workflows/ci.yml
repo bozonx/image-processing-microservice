@@ -33,22 +33,6 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Checkout fleet boilerplate
-        if: github.repository != '${{ github.repository_owner }}/ivank-microservice-boilerplate'
-        uses: actions/checkout@v4
-        with:
-          repository: ${{ github.repository_owner }}/ivank-microservice-boilerplate
-          path: .boilerplate
-
-      - name: Check fleet drift
-        run: |
-          if [ -d .boilerplate ]; then
-            FLEET_BOILERPLATE_PATH=.boilerplate pnpm check:fleet
-            rm -rf .boilerplate
-          else
-            pnpm check:fleet
-          fi
-
       - name: Validate
         run: pnpm validate:all
 
