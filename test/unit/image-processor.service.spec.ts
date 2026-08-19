@@ -1327,5 +1327,146 @@ describe('ImageProcessorService', () => {
         }),
       ).rejects.toThrow(BadRequestException);
     });
+
+    it('should support all watermark gravity position aliases', async () => {
+      const inputBuffer = await sharp({
+        create: { width: 100, height: 100, channels: 3, background: { r: 255, g: 255, b: 255 } },
+      })
+        .png()
+        .toBuffer();
+      const watermarkBuffer = await createWatermarkBuffer(20, 20);
+
+      const positions = [
+        'top',
+        'north',
+        'top right',
+        'right top',
+        'northeast',
+        'right',
+        'east',
+        'bottom right',
+        'right bottom',
+        'southeast',
+        'bottom',
+        'south',
+        'bottom left',
+        'left bottom',
+        'southwest',
+        'left',
+        'west',
+        'top left',
+        'left top',
+        'northwest',
+        'center',
+        'centre',
+      ] as const;
+
+      for (const position of positions) {
+        const result = await processWrapper({
+          image: inputBuffer.toString('base64'),
+          mimeType: 'image/png',
+          watermark: { image: watermarkBuffer.toString('base64') },
+          transform: { watermark: { mode: 'single', position } },
+        });
+        expect(result.dimensions.width).toBe(100);
+      }
+    });
+
+    it('should process with advanced PNG, JPEG, and AVIF options', async () => {
+      const inputBuffer = await sharp({
+        create: {
+          width: 100,
+          height: 100,
+          channels: 4,
+          background: { r: 100, g: 150, b: 200, alpha: 0.8 },
+        },
+      })
+        .png()
+        .toBuffer();
+
+      // Advanced PNG options
+      const resPng = await processWrapper({
+        image: inputBuffer.toString('base64'),
+        mimeType: 'image/png',
+        output: {
+          format: 'png' as any,
+          palette: true,
+          quality: 80,
+          compressionLevel: 9,
+          colors: 64,
+          dither: 0.5,
+          adaptiveFiltering: true,
+        },
+      });
+      expect(resPng.mimeType).toBe('image/png');
+
+      // Advanced JPEG options
+      const resJpeg = await processWrapper({
+        image: inputBuffer.toString('base64'),
+        mimeType: 'image/png',
+        output: {
+          format: 'jpeg' as any,
+          progressive: true,
+          mozjpeg: true,
+          chromaSubsampling: '4:4:4',
+        },
+      });
+      expect(resJpeg.mimeType).toBe('image/jpeg');
+
+      // Advanced AVIF options
+      const resAvif = await processWrapper({
+        image: inputBuffer.toString('base64'),
+        mimeType: 'image/png',
+        output: {
+          format: 'avif' as any,
+          lossless: true,
+          chromaSubsampling: '4:4:4',
+        },
+      });
+      expect(resAvif.mimeType).toBe('image/avif');
+    });
+
+    it('should handle GIF with animated option and effort clamping', async () => {
+      const gifBuffer = await sharp({
+        create: { width: 50, height: 50, channels: 3, background: { r: 255, g: 0, b: 0 } },
+      })
+        .gif()
+        .toBuffer();
+
+      const result = await processWrapper({
+        image: gifBuffer.toString('base64'),
+        mimeType: 'image/gif',
+        output: {
+          format: 'gif' as any,
+          effort: 15, // should be clamped to 10
+          colors: 128,
+          dither: 0.5,
+          progressive: true,
+        },
+      });
+      expect(result.mimeType).toBe('image/gif');
+    });
+
+    it('should throw RequestAbortedError if signal is already aborted before processing', async () => {
+      const inputBuffer = await sharp({
+        create: { width: 10, height: 10, channels: 3, background: { r: 0, g: 0, b: 0 } },
+      })
+        .jpeg()
+        .toBuffer();
+
+      const controller = new AbortController();
+      controller.abort();
+
+      await expect(
+        service.processStream(
+          bufferToStream(inputBuffer),
+          'image/jpeg',
+          undefined,
+          undefined,
+          undefined,
+          controller.signal,
+        ),
+      ).rejects.toThrow('Request aborted');
+    });
   });
 });

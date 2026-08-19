@@ -67,4 +67,11 @@ describe('ExifService', () => {
       'Failed to parse EXIF',
     );
   });
+
+  it('should reject application/octet-stream MIME type because EXIF requires image/* MIME type', async () => {
+    const buffer = Buffer.from('test');
+    await expect(service.extract(buffer, 'application/octet-stream')).rejects.toThrow(
+      'Invalid MIME type: application/octet-stream',
+    );
+  });
 });

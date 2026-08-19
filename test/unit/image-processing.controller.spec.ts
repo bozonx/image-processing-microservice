@@ -248,6 +248,51 @@ describe('ImageProcessingController', () => {
         PayloadTooLargeException,
       );
     });
+
+    it('should throw UnsupportedMediaTypeException when content-type is missing', async () => {
+      const req = { headers: {}, raw: Object.assign(Readable.from([]), { complete: true }) };
+      await expect(controller.processRaw(req as any, mockRes() as any)).rejects.toThrow(
+        'Missing content type',
+      );
+    });
+
+    it('should extract media type ignoring content-type parameters like charset', async () => {
+      const req = rawReq('image/png; charset=utf-8', [Buffer.from('test')]);
+      const res = mockRes();
+
+      jest.spyOn(imageProcessor, 'processStream').mockResolvedValue({
+        buffer: Buffer.from('p'),
+        mimeType: 'image/webp',
+        extension: 'webp',
+        width: 10,
+        height: 10,
+        size: 1,
+      });
+
+      await controller.processRaw(req as any, res as any);
+      expect(imageProcessor.processStream).toHaveBeenCalledWith(
+        expect.any(Readable),
+        'image/png',
+        undefined,
+        undefined,
+        undefined,
+        expect.any(AbortSignal),
+      );
+    });
+
+    it('should throw BadRequestException if watermark is configured in params for processRaw', async () => {
+      const req = {
+        headers: {
+          'content-type': 'image/jpeg',
+          'x-img-params': JSON.stringify({ transform: { watermark: { mode: 'single' } } }),
+        },
+        raw: Object.assign(Readable.from([Buffer.from('test')]), { complete: true }),
+      };
+
+      await expect(controller.processRaw(req as any, mockRes() as any)).rejects.toThrow(
+        'Watermark is not supported for this endpoint',
+      );
+    });
   });
 
   it('should be defined', () => {
@@ -432,6 +477,68 @@ describe('ImageProcessingController', () => {
         PayloadTooLargeException,
       );
     });
+
+    it('should throw BadRequestException if content-type is not multipart', async () => {
+      const req = {
+        headers: { 'content-type': 'application/json' },
+        raw: Object.assign(Readable.from([]), { complete: true }),
+      };
+      await expect(controller.process(req as any, mockRes() as any)).rejects.toThrow(
+        'Invalid content type, expected multipart/form-data',
+      );
+    });
+
+    it('should parse x-img-params when provided as array of headers', async () => {
+      const filePart = {
+        type: 'file',
+        fieldname: 'file',
+        mimetype: 'image/jpeg',
+        file: Readable.from([Buffer.from('test-data')]),
+      };
+      const req = {
+        ...mockReq([filePart]),
+        headers: {
+          'content-type': 'multipart/form-data',
+          'x-img-params': [JSON.stringify({ priority: 1 }), JSON.stringify({ priority: 0 })],
+        },
+      };
+      const res = mockRes();
+      jest.spyOn(imageProcessor, 'processStream').mockResolvedValue({
+        buffer: Buffer.from('p'),
+        mimeType: 'image/webp',
+        extension: 'webp',
+        width: 10,
+        height: 10,
+        size: 1,
+      });
+
+      await controller.process(req as any, res as any);
+      expect(queueService.add).toHaveBeenCalledWith(
+        expect.any(Function),
+        1,
+        expect.any(AbortSignal),
+      );
+    });
+
+    it('should wrap unexpected multipart parsing errors in BadRequestException', async () => {
+      const req = {
+        headers: { 'content-type': 'multipart/form-data' },
+        raw: Object.assign(Readable.from([]), { complete: true }),
+        parts: jest.fn().mockImplementation(() => {
+          async function* gen() {
+            await Promise.resolve();
+            if (Date.now() > 0) {
+              throw new Error('Corrupted multipart boundary');
+            }
+            yield undefined;
+          }
+          return gen();
+        }),
+      };
+      await expect(controller.process(req as any, mockRes() as any)).rejects.toThrow(
+        'Failed to process multipart payload: Corrupted multipart boundary',
+      );
+    });
   });
 
   describe('extractExif', () => {
@@ -458,6 +565,43 @@ describe('ImageProcessingController', () => {
         exif: exifData,
         width: undefined,
         height: undefined,
+      });
+    });
+
+    it('should throw BadRequestException if content-type is not multipart', async () => {
+      const req = {
+        headers: { 'content-type': 'application/json' },
+        raw: Object.assign(Readable.from([]), { complete: true }),
+      };
+      await expect(controller.extractExif(req as any, mockRes() as any)).rejects.toThrow(
+        'Invalid content type, expected multipart/form-data',
+      );
+    });
+
+    it('should throw BadRequestException if no file is uploaded', async () => {
+      const req = mockReq([]);
+      await expect(controller.extractExif(req as any, mockRes() as any)).rejects.toThrow(
+        'No file uploaded',
+      );
+    });
+
+    it('should handle exif extraction returning null / dimensions only', async () => {
+      const filePart = {
+        type: 'file',
+        fieldname: 'file',
+        mimetype: 'image/jpeg',
+        file: Readable.from([Buffer.from('test-data')]),
+      };
+      const req = mockReq([filePart]);
+      jest.spyOn(exifService, 'extract').mockResolvedValue({ width: 300, height: 200 });
+
+      const res = mockRes();
+      await controller.extractExif(req as any, res as any);
+
+      expect(res.send).toHaveBeenCalledWith({
+        exif: null,
+        width: 300,
+        height: 200,
       });
     });
 

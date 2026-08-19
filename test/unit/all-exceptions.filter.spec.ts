@@ -174,6 +174,26 @@ describe('AllExceptionsFilter (unit)', () => {
     expect(replyMock.raw.destroy).toHaveBeenCalledWith(expect.any(Error));
   });
 
+  it('handles Fastify-style errors with non-numeric statusCode property by falling back to 500', () => {
+    const exception = Object.assign(new Error('Something broke'), { statusCode: 'invalid_code' });
+    filter.catch(exception, hostMock);
+
+    expect(replyMock.status).toHaveBeenCalledWith(HttpStatus.INTERNAL_SERVER_ERROR);
+    expect(replyMock.send).toHaveBeenCalledWith(
+      expect.objectContaining({
+        statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
+        message: 'Something broke',
+      }),
+    );
+  });
+
+  it('handles HttpException with non-string and non-array message in response object', () => {
+    const exception = new HttpException({ message: 12345 } as any, HttpStatus.BAD_REQUEST);
+    filter.catch(exception, hostMock);
+
+    expect(replyMock.status).toHaveBeenCalledWith(HttpStatus.BAD_REQUEST);
+  });
+
   it('does not destroy socket if already destroyed when headersSent', () => {
     replyMock.sent = true;
     replyMock.raw.destroyed = true;

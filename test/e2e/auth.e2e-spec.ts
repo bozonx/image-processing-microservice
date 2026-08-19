@@ -90,6 +90,33 @@ describe('Auth (e2e)', () => {
       expect(response.statusCode).toBe(401);
     });
 
+    it('rejects basic auth header when base64 contains no colon', async () => {
+      const response = await app!.inject({
+        method: 'POST',
+        url: '/api/v1/exif',
+        headers: { authorization: `Basic ${Buffer.from('nocolon').toString('base64')}` },
+      });
+      expect(response.statusCode).toBe(401);
+    });
+
+    it('rejects unknown authorization scheme (e.g. Digest)', async () => {
+      const response = await app!.inject({
+        method: 'POST',
+        url: '/api/v1/exif',
+        headers: { authorization: 'Digest username="user1", realm="test"' },
+      });
+      expect(response.statusCode).toBe(401);
+    });
+
+    it('rejects wrong user with correct password', async () => {
+      const response = await app!.inject({
+        method: 'POST',
+        url: '/api/v1/exif',
+        headers: { authorization: createBasicHeader('wronguser', pass) },
+      });
+      expect(response.statusCode).toBe(401);
+    });
+
     it('guards routes outside the api prefix, so a new route is closed by default', async () => {
       const response = await app!.inject({ method: 'GET', url: '/metrics' });
       expect(response.statusCode).toBe(401);
@@ -106,7 +133,8 @@ describe('Auth (e2e)', () => {
       restoreEnv = withEnvVars({
         AUTH_BASIC_USER: '',
         AUTH_BASIC_PASS: '',
-        AUTH_BEARER_TOKENS: 'svc-one:token-one, svc-two:token-two',
+        AUTH_BEARER_TOKENS:
+          'svc-one:token-one, svc-two:token-two, svc-colon:secret:with:multiple:colons',
         ENABLE_UI: 'false',
       });
       app = await createTestApp();
@@ -122,6 +150,15 @@ describe('Auth (e2e)', () => {
         method: 'GET',
         url: '/api/v1/health',
         headers: { authorization: 'Bearer token-two' },
+      });
+      expect(response.statusCode).toBe(200);
+    });
+
+    it('accepts a token containing colons', async () => {
+      const response = await app!.inject({
+        method: 'GET',
+        url: '/api/v1/health',
+        headers: { authorization: 'Bearer secret:with:multiple:colons' },
       });
       expect(response.statusCode).toBe(200);
     });
@@ -144,6 +181,24 @@ describe('Auth (e2e)', () => {
       // The name is configuration, not a credential: only the secret half authenticates.
       expect(response.statusCode).toBe(401);
     });
+
+    it('rejects authorization header without a space delimiter', async () => {
+      const response = await app!.inject({
+        method: 'POST',
+        url: '/api/v1/exif',
+        headers: { authorization: 'BearerNoSpace' },
+      });
+      expect(response.statusCode).toBe(401);
+    });
+
+    it('rejects authorization header with whitespace value only', async () => {
+      const response = await app!.inject({
+        method: 'POST',
+        url: '/api/v1/exif',
+        headers: { authorization: 'Bearer    ' },
+      });
+      expect(response.statusCode).toBe(401);
+    });
   });
 
   describe('invalid configuration', () => {
@@ -152,6 +207,26 @@ describe('Auth (e2e)', () => {
         AUTH_BASIC_USER: '',
         AUTH_BASIC_PASS: '',
         AUTH_BEARER_TOKENS: 'nameless-token',
+        ENABLE_UI: 'false',
+      });
+      await expect(createTestApp()).rejects.toThrow('AUTH_BEARER_TOKENS entry #1');
+    });
+
+    it('refuses to start when a bearer entry has empty token half', async () => {
+      restoreEnv = withEnvVars({
+        AUTH_BASIC_USER: '',
+        AUTH_BASIC_PASS: '',
+        AUTH_BEARER_TOKENS: 'svc-one:',
+        ENABLE_UI: 'false',
+      });
+      await expect(createTestApp()).rejects.toThrow('AUTH_BEARER_TOKENS entry #1');
+    });
+
+    it('refuses to start when a bearer entry has empty client name half', async () => {
+      restoreEnv = withEnvVars({
+        AUTH_BASIC_USER: '',
+        AUTH_BASIC_PASS: '',
+        AUTH_BEARER_TOKENS: ':token-one',
         ENABLE_UI: 'false',
       });
       await expect(createTestApp()).rejects.toThrow('AUTH_BEARER_TOKENS entry #1');

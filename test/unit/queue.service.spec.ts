@@ -158,4 +158,42 @@ describe('QueueService', () => {
 
     expect(results).toContain('completed');
   });
+
+  it('should immediately throw RequestAbortedError if signal is already aborted', async () => {
+    const controller = new AbortController();
+    controller.abort();
+    const task = jest.fn<() => Promise<string>>().mockResolvedValue('ok');
+
+    await expect(service.add(task, 2, controller.signal)).rejects.toThrow('Request aborted');
+    expect(task).not.toHaveBeenCalled();
+  });
+
+  it('should throw 429 HttpException when queue is overloaded (maxQueueSize exceeded)', async () => {
+    const { HttpException, HttpStatus } = await import('@nestjs/common');
+    (service as any).maxQueueSize = 2;
+    (service as any).queue = new (await import('p-queue')).default({ concurrency: 1 });
+
+    let releaseBlocker: () => void;
+    const blocker = new Promise<void>(resolve => {
+      releaseBlocker = resolve;
+    });
+    const firstTaskPromise = service.add(() => blocker);
+
+    // Add 1 waiting task (pending=1, size=1 -> total=2)
+    const secondTaskPromise = service.add(() => Promise.resolve('queued'));
+
+    // Attempt to add 3rd task when maxQueueSize=2
+    await expect(service.add(() => Promise.resolve('overload'))).rejects.toThrow(
+      new HttpException('Queue is overloaded', HttpStatus.TOO_MANY_REQUESTS),
+    );
+
+    releaseBlocker!();
+    await Promise.all([firstTaskPromise, secondTaskPromise]);
+  });
+
+  it('clamps priorities below 0 or above 2 gracefully', async () => {
+    const task = jest.fn<() => Promise<string>>().mockResolvedValue('result');
+    expect(await service.add(task, -5)).toBe('result');
+    expect(await service.add(task, 10)).toBe('result');
+  });
 });
