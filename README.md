@@ -127,31 +127,19 @@ only alongside the container's memory limit.
   with `400`.
 - `8192` is the most any configuration may allow; a larger value fails at startup.
 
-## Deployment
+### Quick commands
 
-Build the production image with `pnpm docker:build`. The multi-stage Dockerfile compiles from a
-clean source tree and runs as the unprivileged `node` user. `APP_VERSION` is injected as
-`SERVICE_VERSION` and appears in the health response.
+```bash
+# Local development
+pnpm dev # Start local development server in watch mode
+pnpm validate # Run static analysis and unit tests
+pnpm validate:all # Run full suite with coverage and build (CI parity)
 
-Create `.env` from `.env.example`, then run `pnpm docker:up`. Compose enables init, graceful stop,
-log rotation, a memory limit and a health check mirroring the one in the image. In an orchestrator, supply
-environment variables through its secret/configuration mechanism instead of copying `.env` into
-the image.
-
-Compose limits the container to 1 GiB. If you raise `IMAGE_MAX_INPUT_PIXELS` or `MAX_CONCURRENCY`,
-raise that limit with them — exceeding it kills every in-flight request, not just the one that
-caused it.
-
-## Development
-
-Use Node.js from `.nvmrc`, enable Corepack, then run `pnpm install`. Copy `.env.example` to `.env`
-and start watch mode with `pnpm dev`. The committed example is the source of truth; do not create
-environment-specific dotenv files.
-
-Before submitting changes, run `pnpm validate` — or `pnpm validate:all`, which is exactly what CI
-runs. Use `pnpm format` and `pnpm lint:fix` for automatic fixes. `docs/dev.md` covers the layout
-and the test split, `docs/deploy.md` the image and its shutdown behaviour. Image processing is CPU- and memory-intensive,
-so test large inputs and queue saturation when changing Sharp pipelines or limits.
+# Docker container
+pnpm docker:build # Build production container image
+pnpm docker:up # Start container with Compose
+pnpm docker:logs # Follow container logs
+```
 
 ## License
 
