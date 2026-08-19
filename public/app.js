@@ -273,11 +273,11 @@ function buildTransformObject() {
     transform.rotate = rotate;
   }
 
-  // Flip & Flop
-  const flip = document.getElementById('flip').checked;
-  const flop = document.getElementById('flop').checked;
-  if (flip) transform.flip = true;
-  if (flop) transform.flop = true;
+  // Flip
+  const flipHorizontal = document.getElementById('flipHorizontal').checked;
+  const flipVertical = document.getElementById('flipVertical').checked;
+  if (flipHorizontal) transform.flipHorizontal = true;
+  if (flipVertical) transform.flipVertical = true;
 
   // Flatten
   const flatten = document.getElementById('flattenColor').value.trim();

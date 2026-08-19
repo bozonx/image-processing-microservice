@@ -3,7 +3,12 @@ import { ConfigService } from '@nestjs/config';
 import sharp from 'sharp';
 import type { Metadata, OverlayOptions, Sharp, SharpOptions } from 'sharp';
 import { Readable } from 'node:stream';
-import { TransformDto, OutputDto, WatermarkDto } from '../dto/process-image.dto.js';
+import {
+  TransformDto,
+  OutputDto,
+  WatermarkDto,
+  type GravityPosition,
+} from '../dto/process-image.dto.js';
 import type { ImageDefaults, ImageConfig } from '../../../config/image.config.js';
 import { isAbortError, RequestAbortedError } from '../client-connection.js';
 
@@ -384,9 +389,9 @@ export class ImageProcessorService {
       }
     }
 
-    // Flip/Flop
-    if (transform.flip) pipeline = pipeline.flip();
-    if (transform.flop) pipeline = pipeline.flop();
+    // Flip (horizontal / vertical mirror)
+    if (transform.flipHorizontal) pipeline = pipeline.flop();
+    if (transform.flipVertical) pipeline = pipeline.flip();
 
     // Manual rotation (after auto-orient)
     if (transform.rotate !== undefined) {
@@ -547,8 +552,53 @@ export class ImageProcessorService {
 
     return {
       input: scaledWatermark,
-      gravity: config.position ?? 'southeast',
+      gravity: this.mapPositionToGravity(config.position) ?? 'southeast',
     };
+  }
+
+  /**
+   * Maps directional/CSS positions to Sharp gravity values for composite overlays.
+   *
+   * @param position - The requested position.
+   * @returns The corresponding Sharp gravity value, or undefined.
+   */
+  private mapPositionToGravity(position?: GravityPosition): OverlayOptions['gravity'] {
+    if (!position) return undefined;
+    switch (position) {
+      case 'top':
+      case 'north':
+        return 'north';
+      case 'top right':
+      case 'right top':
+      case 'northeast':
+        return 'northeast';
+      case 'right':
+      case 'east':
+        return 'east';
+      case 'bottom right':
+      case 'right bottom':
+      case 'southeast':
+        return 'southeast';
+      case 'bottom':
+      case 'south':
+        return 'south';
+      case 'bottom left':
+      case 'left bottom':
+      case 'southwest':
+        return 'southwest';
+      case 'left':
+      case 'west':
+        return 'west';
+      case 'top left':
+      case 'left top':
+      case 'northwest':
+        return 'northwest';
+      case 'center':
+      case 'centre':
+        return 'center';
+      default:
+        return undefined;
+    }
   }
 
   /**

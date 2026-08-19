@@ -288,7 +288,7 @@ describe('ImageProcessorService', () => {
     expect(result.dimensions.height).toBe(100);
   });
 
-  it('should flip and flop image', async () => {
+  it('should flip image horizontally and vertically', async () => {
     const inputBuffer = await sharp({
       create: {
         width: 100,
@@ -304,8 +304,8 @@ describe('ImageProcessorService', () => {
       image: inputBuffer.toString('base64'),
       mimeType: 'image/jpeg',
       transform: {
-        flip: true,
-        flop: true,
+        flipHorizontal: true,
+        flipVertical: true,
       },
     });
 
@@ -446,6 +446,40 @@ describe('ImageProcessorService', () => {
       expect(result.dimensions.height).toBe(500);
       // Visual verification would be needed to confirm watermark presence,
       // but we can check that processing completed successfully
+    });
+
+    it('should apply watermark with CSS position aliases (top, bottom right, top left)', async () => {
+      const inputBuffer = await sharp({
+        create: {
+          width: 200,
+          height: 200,
+          channels: 3,
+          background: { r: 255, g: 255, b: 255 },
+        },
+      })
+        .png()
+        .toBuffer();
+
+      const watermarkBuffer = await createWatermarkBuffer(50, 50);
+
+      for (const pos of ['top', 'bottom right', 'top left', 'right top', 'north'] as const) {
+        const result = await processWrapper({
+          image: inputBuffer.toString('base64'),
+          mimeType: 'image/png',
+          watermark: {
+            image: watermarkBuffer.toString('base64'),
+          },
+          transform: {
+            watermark: {
+              mode: 'single',
+              position: pos,
+            },
+          },
+        });
+
+        expect(result.dimensions.width).toBe(200);
+        expect(result.dimensions.height).toBe(200);
+      }
     });
 
     it('should apply tiled watermark', async () => {
@@ -1118,7 +1152,7 @@ describe('ImageProcessorService', () => {
       expect(result.dimensions.height).toBe(250);
     });
 
-    it('should handle rotate, flip, and flop together', async () => {
+    it('should handle rotate, flipHorizontal, and flipVertical together', async () => {
       const inputBuffer = await sharp({
         create: {
           width: 100,
@@ -1135,8 +1169,8 @@ describe('ImageProcessorService', () => {
         mimeType: 'image/jpeg',
         transform: {
           rotate: 90,
-          flip: true,
-          flop: true,
+          flipHorizontal: true,
+          flipVertical: true,
         },
       });
 
@@ -1240,7 +1274,7 @@ describe('ImageProcessorService', () => {
       const resGif = await processWrapper({
         image: inputBuffer.toString('base64'),
         mimeType: 'image/png',
-        output: { format: 'gif', effort: 5, progressive: true },
+        output: { format: 'gif', effort: 10, progressive: true },
       });
       expect(resGif.mimeType).toBe('image/gif');
 

@@ -23,15 +23,19 @@ export enum ImageFormat {
   RAW = 'raw',
 }
 
-export const RESIZE_POSITIONS = [
+export const GRAVITY_POSITIONS = [
   'top',
   'right top',
+  'top right',
   'right',
   'right bottom',
+  'bottom right',
   'bottom',
   'left bottom',
+  'bottom left',
   'left',
   'left top',
+  'top left',
   'north',
   'northeast',
   'east',
@@ -42,9 +46,11 @@ export const RESIZE_POSITIONS = [
   'northwest',
   'center',
   'centre',
-  'entropy',
-  'attention',
 ] as const;
+
+export type GravityPosition = (typeof GRAVITY_POSITIONS)[number];
+
+export const RESIZE_POSITIONS = [...GRAVITY_POSITIONS, 'entropy', 'attention'] as const;
 
 export type ResizePosition = (typeof RESIZE_POSITIONS)[number];
 
@@ -83,7 +89,7 @@ export class ResizeDto {
   public position?: ResizePosition;
 }
 
-export class ExtractDto {
+export class CropDto {
   @IsNumber()
   @Min(0)
   public left!: number;
@@ -103,27 +109,8 @@ export class ExtractDto {
 
 export class WatermarkDto {
   @IsOptional()
-  @IsEnum([
-    'northwest',
-    'north',
-    'northeast',
-    'west',
-    'center',
-    'east',
-    'southwest',
-    'south',
-    'southeast',
-  ])
-  public position?:
-    | 'northwest'
-    | 'north'
-    | 'northeast'
-    | 'west'
-    | 'center'
-    | 'east'
-    | 'southwest'
-    | 'south'
-    | 'southeast';
+  @IsIn(GRAVITY_POSITIONS)
+  public position?: GravityPosition;
 
   @IsOptional()
   @IsNumber()
@@ -155,8 +142,8 @@ export class TransformDto {
 
   @IsOptional()
   @ValidateNested()
-  @Type(() => ExtractDto)
-  public crop?: ExtractDto;
+  @Type(() => CropDto)
+  public crop?: CropDto;
 
   @IsOptional()
   @IsBoolean()
@@ -170,11 +157,11 @@ export class TransformDto {
 
   @IsOptional()
   @IsBoolean()
-  public flip?: boolean;
+  public flipHorizontal?: boolean;
 
   @IsOptional()
   @IsBoolean()
-  public flop?: boolean;
+  public flipVertical?: boolean;
 
   @IsOptional()
   @IsString()
@@ -211,7 +198,7 @@ export class OutputDto {
   @IsOptional()
   @IsNumber()
   @Min(0)
-  @Max(9)
+  @Max(10)
   public effort?: number;
 
   @IsOptional()

@@ -53,7 +53,7 @@ Run the compiled service with `pnpm build && pnpm start`. Run the container with
 
 Parameters JSON supports:
 
-- **`transform`**: `resize` (`width`, `height`, `maxDimension`, `fit`, `withoutEnlargement`, `position`), `crop` (`left`, `top`, `width`, `height`), `rotate` (-360 to 360), `autoOrient`, `flip`, `flop`, `flatten`, `watermark` (`position`, `opacity`, `scale`, `mode`, `spacing`).
+- **`transform`**: `resize` (`width`, `height`, `maxDimension`, `fit`, `withoutEnlargement`, `position`), `crop` (`left`, `top`, `width`, `height`), `rotate` (-360 to 360), `autoOrient`, `flipHorizontal`, `flipVertical`, `flatten`, `watermark` (`position`, `opacity`, `scale`, `mode`, `spacing`).
 - **`output`**: `format` (`webp`, `avif`, `jpeg`, `png`, `gif`, `tiff`, `raw`), `quality` (1-100), `lossless`, `effort`, `progressive`, `mozjpeg`, `stripMetadata`, etc.
 - **`priority`**: Queue priority (`0` = high, `1` = normal, `2` = low).
 

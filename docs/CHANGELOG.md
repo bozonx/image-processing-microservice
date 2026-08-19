@@ -4,6 +4,10 @@
 
 ### Changed
 
+- **Breaking (API schema).** Renamed `flip` and `flop` parameters in `transform` to explicit `flipHorizontal` and `flipVertical` for clearer semantics.
+- Renamed internal `ExtractDto` to `CropDto` to match the `transform.crop` property name.
+- Unified `watermark.position` with `resize.position` directional options (`GRAVITY_POSITIONS`), adding support for CSS directional positions (`top`, `bottom right`, `top left`, `right top`, etc.) and mapping them directly to Sharp's overlay gravity.
+- Updated `output.effort` validation limit to `@Max(10)` to support the full effort range for GIF and other image encoders.
 - **Breaking (scripts).** `check` is static analysis only (`typecheck && lint && format:check`),
   `validate` adds unit tests, and `validate:all` adds a coverage run of both projects and a
   build. CI now runs `pnpm validate:all` as a single step, so there is nothing CI does that a
