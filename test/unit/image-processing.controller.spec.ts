@@ -11,6 +11,7 @@ import { ImageProcessorService } from '../../src/modules/image-processing/servic
 import { ExifService } from '../../src/modules/image-processing/services/exif.service.js';
 import { QueueService } from '../../src/modules/image-processing/services/queue.service.js';
 import { ConfigService } from '@nestjs/config';
+import { ImageSanitizerService } from '../../src/modules/image-processing/services/image-sanitizer.service.js';
 
 /** Config the controller reads at construction time. */
 const IMAGE_CONFIG: Record<string, unknown> = { image: { maxBytes: 10 * 1024 * 1024 } };
@@ -41,6 +42,10 @@ describe('ImageProcessingController', () => {
           useValue: {
             processStream: jest.fn(),
           },
+        },
+        {
+          provide: ImageSanitizerService,
+          useValue: { sanitizeStream: jest.fn() },
         },
         {
           provide: ExifService,

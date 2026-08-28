@@ -23,6 +23,7 @@ import { ExtractExifDto } from './dto/exif.dto.js';
 import { isAbortError, RequestAbortedError, watchClient } from './client-connection.js';
 import { formatValidationErrors } from '../../common/utils/validation-errors.js';
 import type { ImageConfig } from '../../config/image.config.js';
+import { ImageSanitizerService } from './services/image-sanitizer.service.js';
 
 /** Header carrying request parameters when the body is the image itself. */
 const PARAMS_HEADER = 'x-img-params';
@@ -65,6 +66,7 @@ export class ImageProcessingController {
 
   constructor(
     private readonly imageProcessor: ImageProcessorService,
+    private readonly imageSanitizer: ImageSanitizerService,
     private readonly exifService: ExifService,
     private readonly queueService: QueueService,
     configService: ConfigService,
@@ -166,6 +168,33 @@ export class ImageProcessingController {
     if (result) {
       this.sendImage(res, result);
     }
+  }
+
+  /** Removes metadata from a JPEG or WebP container without re-encoding its image payload. */
+  @Post('sanitize/raw')
+  @HttpCode(HttpStatus.OK)
+  public async sanitizeRaw(@Req() req: FastifyRequest, @Res() res: FastifyReply): Promise<void> {
+    const mimeType = this.assertRawContentType(req);
+    const dto = await this.parseParams(ExtractExifDto, this.header(req, PARAMS_HEADER));
+    const limiter = this.createMaxBytesTransform();
+    const inputStream = (req.raw as unknown as Readable).pipe(limiter);
+    inputStream.on('error', () => {});
+
+    const destroyInput = (): void => {
+      if (!inputStream.destroyed) inputStream.destroy();
+    };
+    const result = await this.runQueued(
+      req,
+      res,
+      dto.priority,
+      signal => {
+        if (signal.aborted) inputStream.destroy(new RequestAbortedError());
+        return this.imageSanitizer.sanitizeStream(inputStream, mimeType);
+      },
+      { onAbort: destroyInput, onFinally: destroyInput },
+    );
+
+    if (result) this.sendImage(res, result);
   }
 
   /**

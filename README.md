@@ -29,12 +29,13 @@ Run the compiled service with `pnpm build && pnpm start`. Run the container with
 
 ## API
 
-| Method | Path                  | Description                                       |
-| ------ | --------------------- | ------------------------------------------------- |
-| `GET`  | `/api/v1/health`      | Public health, identity and queue status          |
-| `POST` | `/api/v1/process`     | Process a multipart image and optional watermark  |
-| `POST` | `/api/v1/process/raw` | Process an image supplied as the raw request body |
-| `POST` | `/api/v1/exif`        | Extract image dimensions and EXIF metadata        |
+| Method | Path                   | Description                                       |
+| ------ | ---------------------- | ------------------------------------------------- |
+| `GET`  | `/api/v1/health`       | Public health, identity and queue status          |
+| `POST` | `/api/v1/process`      | Process a multipart image and optional watermark  |
+| `POST` | `/api/v1/process/raw`  | Process an image supplied as the raw request body |
+| `POST` | `/api/v1/sanitize/raw` | Remove metadata without re-encoding JPEG or WebP  |
+| `POST` | `/api/v1/exif`         | Extract image dimensions and EXIF metadata        |
 
 ### Endpoints and usage
 
@@ -48,6 +49,10 @@ Run the compiled service with `pnpm build && pnpm start`. Run the container with
   - Processing parameters are passed as a JSON string via the `x-img-params` header. Watermark is not supported on this endpoint.
 - **`POST /api/v1/exif`**
   - Accepts `multipart/form-data` with `file` and optional `params` JSON (priority). Returns `{ width, height, exif }`.
+- **`POST /api/v1/sanitize/raw`**
+  - Accepts a raw JPEG or WebP body and removes EXIF, XMP, ICC, comments, and non-structural application metadata without re-encoding compressed image data.
+  - Animated WebP is preserved. JPEG files with a non-default EXIF orientation are rejected because removing that orientation without rotating pixels would change how the image is displayed.
+  - JPEG and WebP are the only supported formats. AVIF and all other formats must continue through the regular processing endpoint.
 
 ### Processing options
 
